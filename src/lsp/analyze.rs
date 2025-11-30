@@ -1,4 +1,8 @@
-use crate::{cache::*, models::*, toolchain};
+//! Analysis module for RustOwl LSP
+//!
+//! This module handles triggering ownership/lifetime analysis using the integrated compiler.
+
+use crate::{cache::*, compiler, models::*, toolchain};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
@@ -186,61 +190,67 @@ impl Analyzer {
         AnalyzeEventIter {
             receiver,
             notify,
-            child,
+            child: Some(child),
         }
     }
 
     async fn analyze_single_file(&self, path: &Path) -> AnalyzeEventIter {
         let sysroot = toolchain::get_sysroot();
-        let rustowlc_path = toolchain::get_executable_path("rustowlc");
-
-        let mut command = process::Command::new(&rustowlc_path);
-        command
-            .arg(&rustowlc_path) // rustowlc triggers when first arg is the path of itself
-            .arg(format!("--sysroot={}", sysroot.display()))
-            .arg("--crate-type=lib");
-        #[cfg(unix)]
-        command.arg("-o/dev/null");
-        #[cfg(windows)]
-        command.arg("-oNUL");
-        command
-            .arg(path)
-            .stdout(std::process::Stdio::piped())
-            .kill_on_drop(true);
-
-        toolchain::set_rustc_env(&mut command, &sysroot);
-
-        if log::max_level()
-            .to_level()
-            .map(|v| v < log::Level::Info)
-            .unwrap_or(true)
-        {
-            command.stderr(std::process::Stdio::null());
-        }
-
-        log::info!("start analyzing {}", path.display());
-        let mut child = command.spawn().unwrap();
-        let mut stdout = BufReader::new(child.stdout.take().unwrap()).lines();
+        let path = path.to_path_buf();
 
         let (sender, receiver) = mpsc::channel(1024);
         let notify = Arc::new(Notify::new());
         let notify_c = notify.clone();
-        let _handle = tokio::spawn(async move {
-            // prevent command from dropped
-            while let Ok(Some(line)) = stdout.next_line().await {
-                if let Ok(ws) = serde_json::from_str::<Workspace>(&line) {
+
+        log::info!("start analyzing {}", path.display());
+
+        // Build args for in-process compiler
+        let mut args = vec![
+            "rustowl".to_string(), // program name
+            "rustowl".to_string(), // triggers workspace wrapper mode
+            format!("--sysroot={}", sysroot.display()),
+            "--crate-type=lib".to_string(),
+        ];
+        #[cfg(unix)]
+        args.push("-o/dev/null".to_string());
+        #[cfg(windows)]
+        args.push("-oNUL".to_string());
+        args.push(path.to_string_lossy().to_string());
+
+        // Run compiler in a separate thread with panic handling
+        let _handle = tokio::task::spawn_blocking(move || {
+            let (ws_receiver, compiler_handle) = compiler::run_compiler_in_thread(args);
+
+            // Create a runtime to receive results
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+
+            rt.block_on(async {
+                let mut ws_receiver = ws_receiver;
+                while let Some(ws) = ws_receiver.recv().await {
                     let event = AnalyzerEvent::Analyzed(ws);
-                    let _ = sender.send(event).await;
+                    if sender.send(event).await.is_err() {
+                        break;
+                    }
                 }
+            });
+
+            // Wait for compiler thread to finish
+            match compiler_handle.join() {
+                Ok(Ok(_)) => log::info!("Compiler finished successfully"),
+                Ok(Err(e)) => log::warn!("Compiler error: {}", e),
+                Err(_) => log::error!("Compiler thread panicked"),
             }
-            log::info!("stdout closed");
+
             notify_c.notify_one();
         });
 
         AnalyzeEventIter {
             receiver,
             notify,
-            child,
+            child: None,
         }
     }
 }
@@ -249,7 +259,7 @@ pub struct AnalyzeEventIter {
     receiver: mpsc::Receiver<AnalyzerEvent>,
     notify: Arc<Notify>,
     #[allow(unused)]
-    child: process::Child,
+    child: Option<process::Child>,
 }
 impl AnalyzeEventIter {
     pub async fn next_event(&mut self) -> Option<AnalyzerEvent> {

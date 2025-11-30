@@ -1,7 +1,7 @@
 use clap::{ArgAction, Args, CommandFactory, Parser, Subcommand, ValueHint};
 use clap_complete::generate;
-use std::{env, io};
 use std::io::Write;
+use std::{env, io};
 
 #[derive(Debug, Parser)]
 #[command(author)]

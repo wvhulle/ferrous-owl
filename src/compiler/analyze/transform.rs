@@ -1,3 +1,4 @@
+use crate::models::*;
 use rayon::prelude::*;
 use rustc_borrowck::consumers::{BorrowIndex, BorrowSet, RichLocation};
 use rustc_hir::def_id::LocalDefId;
@@ -9,7 +10,6 @@ use rustc_middle::{
     ty::{TyCtxt, TypeFoldable, TypeFolder},
 };
 use rustc_span::source_map::SourceMap;
-use rustowl::models::*;
 use std::collections::{HashMap, HashSet};
 
 /// RegionEraser to erase region variables from MIR body

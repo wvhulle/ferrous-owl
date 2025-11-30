@@ -1,161 +1,98 @@
+//! Toolchain configuration for RustOwl
+//!
+//! Provides the sysroot path and cargo command setup for MIR analysis.
+
+use std::collections::VecDeque;
 use std::env;
 use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
 
+/// Rust toolchain version (set at compile time in build.rs)
 pub const TOOLCHAIN: &str = env!("RUSTOWL_TOOLCHAIN");
+
+/// Host target triple (set at compile time in build.rs)
 pub const HOST_TUPLE: &str = env!("HOST_TUPLE");
 
-/// Returns a pre-configured sysroot from RUSTOWL_SYSROOT environment variable.
-/// When set, this sysroot is used directly without toolchain downloading.
-pub fn get_configured_sysroot() -> Option<PathBuf> {
-    env::var("RUSTOWL_SYSROOT")
-        .ok()
-        .map(PathBuf::from)
-        .filter(|p| {
-            let exists = p.is_dir();
-            if exists {
-                log::info!(
-                    "Using pre-configured sysroot from RUSTOWL_SYSROOT: {}",
-                    p.display()
-                );
-            }
-            exists
-        })
-}
-
-/// Returns the runtime directory by checking standard locations.
-/// Prefers RUSTOWL_RUNTIME_DIR, then derives from RUSTOWL_SYSROOT, then standard paths.
-static RUNTIME_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
-    if let Ok(runtime_dir) = env::var("RUSTOWL_RUNTIME_DIR") {
-        let path = PathBuf::from(&runtime_dir);
-        log::info!("Using RUSTOWL_RUNTIME_DIR: {}", path.display());
-        return path;
-    }
-
-    if let Some(parent) = get_configured_sysroot().and_then(|sysroot| {
-        sysroot
-            .parent()
-            .and_then(|p| p.parent())
-            .map(|p| p.to_path_buf())
-    }) {
-        log::info!(
-            "Deriving runtime dir from RUSTOWL_SYSROOT: {}",
-            parent.display()
-        );
-        return parent;
-    }
-
-    let opt = PathBuf::from("/opt/rustowl");
-    if sysroot_from_runtime(&opt).is_dir() {
-        return opt;
-    }
-
-    let same = env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-        .unwrap_or_else(|| PathBuf::from("."));
-    if sysroot_from_runtime(&same).is_dir() {
-        return same;
-    }
-
-    env::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".rustowl")
-});
-
-fn sysroot_from_runtime(runtime: impl AsRef<Path>) -> PathBuf {
-    runtime.as_ref().join("sysroot").join(TOOLCHAIN)
-}
-
+/// Returns the Rust sysroot path for the compiler.
+///
+/// Resolution order:
+/// 1. `RUSTOWL_SYSROOT` environment variable
+/// 2. `rustc --print sysroot` output
 pub fn get_sysroot() -> PathBuf {
-    if let Some(sysroot) = get_configured_sysroot() {
-        return sysroot;
-    }
-
-    let runtime = RUNTIME_DIR.clone();
-    let sysroot = sysroot_from_runtime(&runtime);
-
-    if !sysroot.is_dir() {
-        log::error!(
-            "Sysroot not found at {}. Please install the toolchain using the installation scripts in the installation/ directory.",
-            sysroot.display()
-        );
-        std::process::exit(1);
-    }
-
-    sysroot
-}
-
-pub fn get_executable_path(name: &str) -> String {
-    #[cfg(not(windows))]
-    let exec_name = name.to_owned();
-    #[cfg(windows)]
-    let exec_name = format!("{name}.exe");
-
-    let sysroot = get_sysroot();
-    let exec_bin = sysroot.join("bin").join(&exec_name);
-    if exec_bin.is_file() {
-        log::info!("{name} is selected in sysroot/bin");
-        return exec_bin.to_string_lossy().to_string();
-    }
-
-    if let Ok(current_exec) = env::current_exe() {
-        let mut exec_path = current_exec;
-        exec_path.set_file_name(&exec_name);
-        if exec_path.is_file() {
-            log::info!("{name} is selected in the same directory as rustowl executable");
-            return exec_path.to_string_lossy().to_string();
+    if let Ok(sysroot) = env::var("RUSTOWL_SYSROOT") {
+        let path = PathBuf::from(sysroot);
+        if path.is_dir() {
+            log::info!("Using sysroot from RUSTOWL_SYSROOT: {}", path.display());
+            return path;
         }
     }
 
-    log::warn!("{name} not found; using fallback from PATH");
-    exec_name
+    if let Ok(output) = std::process::Command::new("rustc")
+        .arg("--print")
+        .arg("sysroot")
+        .output()
+        && output.status.success()
+    {
+        let sysroot = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let path = PathBuf::from(&sysroot);
+        if path.is_dir() {
+            log::info!("Using sysroot from rustc: {}", path.display());
+            return path;
+        }
+    }
+
+    log::error!("Could not determine Rust sysroot. Set RUSTOWL_SYSROOT or ensure rustc is in PATH.");
+    std::process::exit(1);
 }
 
+/// Returns the path to the current executable.
+fn current_exe_path() -> PathBuf {
+    env::current_exe().expect("Failed to get current executable path")
+}
+
+/// Creates a cargo command configured for RustOwl analysis.
+///
+/// Sets up environment variables so cargo uses the current rustowl binary
+/// as the compiler wrapper.
 pub fn setup_cargo_command() -> tokio::process::Command {
-    let cargo = get_executable_path("cargo");
-    let mut command = tokio::process::Command::new(&cargo);
-    let rustowlc = get_executable_path("rustowlc");
+    let mut command = tokio::process::Command::new("cargo");
+    let rustowl = current_exe_path();
+    let sysroot = get_sysroot();
+
     command
-        .env("RUSTC", &rustowlc)
-        .env("RUSTC_WORKSPACE_WRAPPER", &rustowlc);
-    set_rustc_env(&mut command, &get_sysroot());
+        .env("RUSTC", &rustowl)
+        .env("RUSTC_WORKSPACE_WRAPPER", &rustowl)
+        .env("RUSTC_BOOTSTRAP", "1")
+        .env("CARGO_ENCODED_RUSTFLAGS", format!("--sysroot={}", sysroot.display()));
+
+    prepend_library_path(&mut command, &sysroot);
     command
 }
 
-pub fn set_rustc_env(command: &mut tokio::process::Command, sysroot: &Path) {
-    command.env("RUSTC_BOOTSTRAP", "1").env(
-        "CARGO_ENCODED_RUSTFLAGS",
-        format!("--sysroot={}", sysroot.display()),
-    );
+fn prepend_library_path(command: &mut tokio::process::Command, sysroot: &Path) {
+    let lib_dir = sysroot.join("lib");
 
     #[cfg(target_os = "linux")]
     {
-        let mut paths = env::split_paths(&env::var("LD_LIBRARY_PATH").unwrap_or_default())
-            .collect::<std::collections::VecDeque<_>>();
-        paths.push_front(sysroot.join("lib"));
-        if let Ok(paths) = env::join_paths(paths) {
-            command.env("LD_LIBRARY_PATH", paths);
-        }
+        let paths = prepend_to_path_var("LD_LIBRARY_PATH", &lib_dir);
+        command.env("LD_LIBRARY_PATH", paths);
     }
+
     #[cfg(target_os = "macos")]
     {
-        let mut paths =
-            env::split_paths(&env::var("DYLD_FALLBACK_LIBRARY_PATH").unwrap_or_default())
-                .collect::<std::collections::VecDeque<_>>();
-        paths.push_front(sysroot.join("lib"));
-        if let Ok(paths) = env::join_paths(paths) {
-            command.env("DYLD_FALLBACK_LIBRARY_PATH", paths);
-        }
+        let paths = prepend_to_path_var("DYLD_FALLBACK_LIBRARY_PATH", &lib_dir);
+        command.env("DYLD_FALLBACK_LIBRARY_PATH", paths);
     }
+
     #[cfg(target_os = "windows")]
     {
-        if let Some(path_var) = env::var_os("Path") {
-            let mut paths = env::split_paths(&path_var).collect::<std::collections::VecDeque<_>>();
-            paths.push_front(sysroot.join("bin"));
-            if let Ok(paths) = env::join_paths(paths) {
-                command.env("Path", paths);
-            }
-        }
+        let paths = prepend_to_path_var("Path", &sysroot.join("bin"));
+        command.env("Path", paths);
     }
+}
+
+fn prepend_to_path_var(var: &str, new_path: &Path) -> std::ffi::OsString {
+    let current = env::var_os(var).unwrap_or_default();
+    let mut paths: VecDeque<PathBuf> = env::split_paths(&current).collect();
+    paths.push_front(new_path.to_path_buf());
+    env::join_paths(paths).expect("Failed to join paths")
 }

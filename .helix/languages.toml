@@ -1,0 +1,7 @@
+[language-server.rustowl]
+args = ["run", "--", "--stdio"]
+command = "cargo"
+
+[[language]]
+language-servers = ["rust-analyzer", "rustowl"]
+name = "rust"

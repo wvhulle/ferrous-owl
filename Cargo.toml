@@ -16,6 +16,10 @@ version = "0.0.1"
 [package.metadata.rust-analyzer]
 rustc_private = true
 
+[[bin]]
+name = "rustowl"
+path = "src/main.rs"
+test = false
 
 [[bench]]
 harness = false
@@ -58,9 +62,6 @@ clap_complete_nushell = "4"
 clap_mangen = "0.2"
 regex = "1"
 
-[target.'cfg(not(target_env = "msvc"))'.dependencies]
-tikv-jemalloc-sys = "0.6"
-tikv-jemallocator = "0.6"
 
 [profile.release]
 codegen-units = 1

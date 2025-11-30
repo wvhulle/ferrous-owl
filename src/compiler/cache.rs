@@ -1,8 +1,10 @@
+//! Cache management for MIR analysis results
+
+use crate::models::*;
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
 use rustc_middle::ty::TyCtxt;
 use rustc_query_system::ich::StableHashingContext;
 use rustc_stable_hash::{FromStableHash, SipHasher128Hash};
-use rustowl::models::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::Write;
@@ -78,12 +80,18 @@ impl CacheData {
     }
 }
 
+impl Default for CacheData {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Get cache data
 ///
 /// If cache is not enabled, then return None.
 /// If file is not exists, it returns empty [`CacheData`].
 pub fn get_cache(krate: &str) -> Option<CacheData> {
-    if let Some(cache_path) = rustowl::cache::get_cache_path() {
+    if let Some(cache_path) = crate::cache::get_cache_path() {
         let cache_path = cache_path.join(format!("{krate}.json"));
         let s = match std::fs::read_to_string(&cache_path) {
             Ok(v) => v,
@@ -101,7 +109,7 @@ pub fn get_cache(krate: &str) -> Option<CacheData> {
 }
 
 pub fn write_cache(krate: &str, cache: &CacheData) {
-    if let Some(cache_path) = rustowl::cache::get_cache_path() {
+    if let Some(cache_path) = crate::cache::get_cache_path() {
         if let Err(e) = std::fs::create_dir_all(&cache_path) {
             log::warn!("failed to create cache dir: {e}");
             return;

@@ -1,7 +1,10 @@
+//! MIR analyzer initialization and analysis
+
 mod polonius_analyzer;
 mod transform;
 
 use super::cache;
+use crate::models::*;
 use rustc_borrowck::consumers::{
     ConsumerOptions, PoloniusInput, PoloniusOutput, get_body_with_borrowck_facts,
 };
@@ -11,7 +14,6 @@ use rustc_middle::{
     ty::TyCtxt,
 };
 use rustc_span::Span;
-use rustowl::models::*;
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
@@ -36,6 +38,7 @@ fn range_from_span(source: &str, span: Span, offset: u32) -> Option<Range> {
     let until = Loc::new(source, span.hi().0, offset);
     Range::new(from, until)
 }
+
 fn sort_locs(v: &mut [(BasicBlock, usize)]) {
     v.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
 }
@@ -55,6 +58,7 @@ pub struct MirAnalyzer {
     mutable_live: HashMap<Local, Vec<Range>>,
     drop_range: HashMap<Local, Vec<Range>>,
 }
+
 impl MirAnalyzer {
     /// initialize analyzer
     pub fn init(tcx: TyCtxt<'_>, fn_id: LocalDefId) -> MirAnalyzerInitResult {

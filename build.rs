@@ -16,17 +16,18 @@ fn main() -> Result<(), Error> {
     let host_tuple = get_host_tuple();
     println!("cargo::rustc-env=HOST_TUPLE={host_tuple}");
 
+    // Set up rpath for finding librustc_driver at runtime
     #[cfg(target_os = "macos")]
     {
-        println!("cargo::rustc-link-arg-bin=rustowlc=-Wl,-rpath,@executable_path/../lib");
+        println!("cargo::rustc-link-arg=-Wl,-rpath,@executable_path/../lib");
     }
     #[cfg(target_os = "linux")]
     {
-        println!("cargo::rustc-link-arg-bin=rustowlc=-Wl,-rpath,$ORIGIN/../lib");
+        println!("cargo::rustc-link-arg=-Wl,-rpath,$ORIGIN/../lib");
     }
     #[cfg(target_os = "windows")]
     {
-        println!("cargo::rustc-link-arg-bin=rustowlc=/LIBPATH:..\\bin");
+        println!("cargo::rustc-link-arg=/LIBPATH:..\\bin");
     }
 
     Ok(())

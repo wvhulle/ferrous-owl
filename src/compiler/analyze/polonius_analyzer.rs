@@ -1,9 +1,9 @@
 use super::transform::{BorrowData, BorrowMap};
+use crate::{models::*, utils};
 use rayon::prelude::*;
 use rustc_borrowck::consumers::{PoloniusLocationTable, PoloniusOutput};
 use rustc_index::Idx;
 use rustc_middle::mir::Local;
-use rustowl::{models::*, utils};
 use std::collections::{HashMap, HashSet};
 
 pub fn get_accurate_live(
