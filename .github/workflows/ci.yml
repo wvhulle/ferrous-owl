@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  pull_request:
+    branches: ["main"]
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+  workflow_call:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Check formatting
+        run: cargo fmt --check
+
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Spell check
+        uses: crate-ci/typos@v1.39.2
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: ./scripts/package.json
+          run_install: |
+            - cwd: ./scripts
+
+      - name: Validate commits
+        working-directory: ./scripts
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            pnpm commitlint --last --verbose
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            pnpm commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
+          fi
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Run tests
+        run: cargo test
+
+      - name: Test rustowl check
+        run: ./target/release/rustowl check ./perf-tests
+
+  security:
+    name: Security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        run: rustup show
+
+      - name: Install cargo-deny
+        run: cargo install cargo-deny
+
+      - name: Run cargo-deny
+        run: cargo deny check
+
+  vscode:
+    name: VS Code Extension
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: ./editors/vscode/package.json
+          run_install: |
+            - cwd: ./editors/vscode
+
+      - name: Check formatting
+        run: pnpm prettier -c src
+        working-directory: ./editors/vscode
+
+      - name: Lint and type check
+        run: pnpm lint && pnpm check-types
+        working-directory: ./editors/vscode
+
+      - name: Run tests
+        run: xvfb-run -a pnpm test
+        working-directory: ./editors/vscode

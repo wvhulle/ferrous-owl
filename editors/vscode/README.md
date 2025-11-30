@@ -1,8 +1,32 @@
-# RustOwl VSCode
+# RustOwl VSCode Extension
 
-This is RustOwl extension for VSCode.
+Visualizes ownership and lifetimes in Rust code.
 
-## Installing RustOwl
+## Prerequisites
 
-Before using RustOwl VSCode, you need to install RustOwl.
-For detail, refer the [document](https://github.com/cordx56/rustowl/blob/main/README.md).
+- [RustOwl](https://github.com/cordx56/rustowl) installed
+- [VS Code](https://code.visualstudio.com/)
+- [Node.js](https://nodejs.org/) v20+
+- [pnpm](https://pnpm.io/) (`npm install -g pnpm`)
+
+## Development
+
+Install dependencies:
+
+```bash
+pnpm install --frozen-lockfile
+```
+
+Open this directory in VS Code and press `F5` to launch a development instance with the extension loaded.
+
+## Testing
+
+```bash
+pnpm test
+```
+
+## Building
+
+```bash
+pnpm run package
+```
