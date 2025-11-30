@@ -5,9 +5,6 @@ use std::fs;
 use std::io::Error;
 use std::process::Command;
 
-include!("src/cli.rs");
-include!("src/shells.rs");
-
 fn main() -> Result<(), Error> {
     // Declare custom cfg flags to avoid warnings
     println!("cargo::rustc-check-cfg=cfg(miri)");
@@ -34,24 +31,6 @@ fn main() -> Result<(), Error> {
     {
         println!("cargo::rustc-link-arg-bin=rustowlc=/LIBPATH:..\\bin");
     }
-
-    let out_dir =
-        std::path::Path::new(&env::var("OUT_DIR").expect("OUT_DIR unset. Expected path."))
-            .join("rustowl-build-time-out");
-    let mut cmd = Cli::command();
-    let completion_out_dir = out_dir.join("completions");
-    fs::create_dir_all(&completion_out_dir)?;
-
-    for shell in Shell::value_variants() {
-        generate_to(*shell, &mut cmd, "rustowl", &completion_out_dir)?;
-    }
-    let man_out_dir = out_dir.join("man");
-    fs::create_dir_all(&man_out_dir)?;
-    let man = clap_mangen::Man::new(cmd);
-    let mut buffer: Vec<u8> = Default::default();
-    man.render(&mut buffer)?;
-
-    std::fs::write(man_out_dir.join("rustowl.1"), buffer)?;
 
     Ok(())
 }

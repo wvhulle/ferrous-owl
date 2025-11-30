@@ -2,11 +2,13 @@
 //!
 //! An LSP server for visualizing ownership and lifetimes in Rust, designed for debugging and optimization.
 
+
 use clap::{CommandFactory, Parser};
 use clap_complete::generate;
 use rustowl::*;
 use std::env;
 use std::io;
+use std::io::Write;
 use tower_lsp::{LspService, Server};
 
 use crate::cli::{Cli, Commands, ToolchainCommands};
@@ -92,6 +94,12 @@ async fn handle_command(command: Commands) {
             set_log_level("off".parse().unwrap());
             let shell = command_options.shell;
             generate(shell, &mut Cli::command(), "rustowl", &mut io::stdout());
+        }
+        Commands::Manpage => {
+            let man = clap_mangen::Man::new(Cli::command());
+            let mut buffer: Vec<u8> = Default::default();
+            man.render(&mut buffer).unwrap();
+            std::io::stdout().write_all(&buffer).unwrap();
         }
     }
 }

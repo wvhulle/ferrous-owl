@@ -1,30 +1,23 @@
 # Contributing to RustOwl
 
-Thank you for considering contributing to RustOwl!
+## Setup
 
-## Development Setup
-
-### Prerequisites
-
-- Rust toolchain (automatically managed via `rust-toolchain.toml`)
+- Rust toolchain (managed via `rust-toolchain.toml`)
 - Basic build tools
 
-For installation instructions, see [installation/](installation/).
+See [installation/](installation/) for install steps.
+Editor setup: [editors/](editors/)
 
-For editor setup, see [editors/](editors/).
-
-### Building
+## Building
 
 ```bash
 cargo build
 cargo test
 ```
 
-The project uses `rust-toolchain.toml` to automatically select the correct nightly toolchain.
+## Pre-PR Checklist
 
-## Before Submitting PR
-
-### Rust Code
+Format, lint, test, and build:
 
 ```bash
 cargo fmt
@@ -33,46 +26,19 @@ cargo test
 cargo build --release
 ```
 
-### VS Code Extension
-
-From `editors/vscode/`:
-
-```bash
-pnpm install
-pnpm fmt
-pnpm lint
-pnpm check-types
-pnpm test
-```
-
-### Neovim Plugin
-
-From `editors/neovim/`:
-
-```bash
-./test.sh
-```
-
-Requires `nvim` in PATH.
-
-### Security
+## Security Audit
 
 ```bash
 cargo install cargo-deny
 cargo deny check
 ```
 
-Checks for:
+- Checks vulnerabilities, licenses, duplicates
+- Config: [deny.toml](deny.toml)
 
-- Security vulnerabilities (RustSec database)
-- License compliance
-- Duplicate dependencies
-
-Configuration: [deny.toml](deny.toml)
-
-### Optional: Memory Safety
+## Memory Safety (optional)
 
 ```bash
 cargo miri test
-valgrind --leak-check=full ./target/release/rustowl  # Linux only
+valgrind --leak-check=full ./target/release/rustowl
 ```

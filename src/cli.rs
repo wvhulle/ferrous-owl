@@ -32,6 +32,9 @@ pub enum Commands {
 
     /// Generate shell completions.
     Completions(Completions),
+
+    /// Generate a man page for the CLI.
+    Manpage,
 }
 
 #[derive(Args, Debug)]
