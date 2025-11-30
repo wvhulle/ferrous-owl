@@ -1,23 +1,25 @@
 [package]
-name = "rustowl"
-version = "1.0.0-rc.1"
-authors = ["cordx56 <cordx56@cordx.cx>"]
-edition = "2024"
-description = "Visualize Ownership and Lifetimes in Rust"
-documentation = "https://github.com/cordx56/rustowl/blob/main/README.md"
-readme = "README.md"
-repository = "https://github.com/cordx56/rustowl"
-license = "MPL-2.0"
-keywords = ["lifetime", "lsp", "ownership", "visualization"]
+authors = [
+  "cordx56 <cordx56@cordx.cx>",
+  "wvhulle <willemvanhulle@protonmail.com>",
+]
 categories = ["development-tools", "visualization"]
+description = "Visualize Ownership and Lifetimes in Rust"
+edition = "2024"
+keywords = ["lifetime", "lsp", "ownership", "visualization"]
+license = "MPL-2.0"
+name = "rustowl"
+readme = "README.md"
+repository = "https://github.com/wvhulle/rustowl"
+version = "1.0.0-rc.1"
 
 [package.metadata.rust-analyzer]
 rustc_private = true
 
 [package.metadata.binstall]
-pkg-url = "{ repo }/releases/download/v{ version }/rustowl-{ target }{ archive-suffix }"
-pkg-fmt = "tgz"
 disabled-strategies = ["quick-install", "compile"]
+pkg-fmt = "tgz"
+pkg-url = "{ repo }/releases/download/v{ version }/rustowl-{ target }{ archive-suffix }"
 
 [package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
 pkg-fmt = "zip"
@@ -85,23 +87,23 @@ tikv-jemallocator = "0.6"
 zip = "6.0.0"
 
 [profile.release]
+codegen-units = 1
+lto = "fat"
 opt-level = 3
 strip = "debuginfo"
-lto = "fat"
-codegen-units = 1
 
 [profile.release.package."*"]
-strip = "symbols"
 opt-level = 3
+strip = "symbols"
 
 [profile.arm-windows-release]
 inherits = "release"
 lto = "off"
 
 [profile.security]
+debug = true
+debug-assertions = true
 inherits = "release"
 opt-level = 1
-debug = true
-strip = "none"
-debug-assertions = true
 overflow-checks = true
+strip = "none"

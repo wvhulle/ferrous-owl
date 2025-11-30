@@ -20,7 +20,7 @@ if #vim.api.nvim_list_uis() == 0 then
   require('mini.test').setup {
     collect = {
       find_files = function()
-        return vim.fn.globpath('nvim-tests', '**/test_*.lua', true, true)
+        return vim.fn.globpath('editors/neovim/nvim-tests', '**/test_*.lua', true, true)
       end,
     },
   }

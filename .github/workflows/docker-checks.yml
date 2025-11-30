@@ -4,12 +4,12 @@ on:
   pull_request:
     branches: ["main"]
     paths:
-      - "Dockerfile"
+      - "packages/docker/**"
       - ".github/workflows/docker-checks.yml"
   push:
     branches: ["main"]
     paths:
-      - "Dockerfile"
+      - "packages/docker/**"
       - ".github/workflows/docker-checks.yml"
   workflow_dispatch:
 
@@ -24,7 +24,7 @@ jobs:
       - name: Run hadolint
         uses: hadolint/hadolint-action@v3.3.0
         with:
-          dockerfile: Dockerfile
+          dockerfile: packages/docker/Dockerfile
 
   docker-build:
     name: Docker Build Test
@@ -40,6 +40,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: packages/docker/Dockerfile
           push: false
           load: true
           tags: rustowl:test

@@ -45,7 +45,7 @@ T['ftplugin_creates_highlight_groups'] = function()
       end,
     },
   }
-  vim.cmd('source ftplugin/rust.lua')
+  vim.cmd('source editors/neovim/ftplugin/rust.lua')
   local highlight_groups = {
     'lifetime',
     'imm_borrow',
@@ -89,7 +89,7 @@ T['ftplugin_creates_user_command'] = function()
       return false
     end,
   }
-  vim.cmd('source ftplugin/rust.lua')
+  vim.cmd('source editors/neovim/ftplugin/rust.lua')
   local commands = vim.api.nvim_get_commands {}
   expect.equality(commands.Rustowl ~= nil, true)
 end
@@ -112,7 +112,7 @@ T['user_command_errors_on_non_rust_buffer'] = function()
     end,
   }
   vim.bo.filetype = 'python'
-  vim.cmd('source ftplugin/rust.lua')
+  vim.cmd('source editors/neovim/ftplugin/rust.lua')
   local notify_called = false
   local notify_message = nil
   local notify_level = nil
@@ -151,7 +151,7 @@ T['auto_attach_starts_lsp'] = function()
       return {}
     end,
   }
-  vim.cmd('source ftplugin/rust.lua')
+  vim.cmd('source editors/neovim/ftplugin/rust.lua')
   expect.equality(lsp_start_called, true)
 end
 
@@ -170,7 +170,7 @@ T['ftplugin_loads_without_error'] = function()
   }
   vim.bo.filetype = 'rust'
   expect.no_error(function()
-    vim.cmd('source ftplugin/rust.lua')
+    vim.cmd('source editors/neovim/ftplugin/rust.lua')
   end)
   expect.equality(vim.g.loaded_rustowl, true)
 end
@@ -189,7 +189,7 @@ T['ftplugin_creates_underline_highlights'] = function()
     },
   }
   vim.bo.filetype = 'rust'
-  vim.cmd('source ftplugin/rust.lua')
+  vim.cmd('source editors/neovim/ftplugin/rust.lua')
   local hl = vim.api.nvim_get_hl(0, { name = 'lifetime' })
   -- Accept underline or undercurl (for plugin compatibility)
   expect.equality((hl.underline or false) or (hl.undercurl or false), true)
@@ -237,7 +237,7 @@ T['user_command_calls_correct_functions'] = function()
     end,
   }
   vim.bo.filetype = 'rust'
-  vim.cmd('source ftplugin/rust.lua')
+  vim.cmd('source editors/neovim/ftplugin/rust.lua')
   vim.cmd('Rustowl start_client')
   expect.equality(lsp_start_called, true)
   vim.cmd('Rustowl enable')
@@ -268,7 +268,7 @@ T['auto_enable_enables_on_lsp_attach'] = function()
     end,
   }
   vim.bo.filetype = 'rust'
-  vim.cmd('source ftplugin/rust.lua')
+  vim.cmd('source editors/neovim/ftplugin/rust.lua')
   expect.equality(enable_on_lsp_attach_called, true)
 end
 

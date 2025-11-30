@@ -12,7 +12,48 @@ pub const HOST_TUPLE: &str = env!("HOST_TUPLE");
 const TOOLCHAIN_CHANNEL: &str = env!("TOOLCHAIN_CHANNEL");
 const TOOLCHAIN_DATE: Option<&str> = option_env!("TOOLCHAIN_DATE");
 
+/// Returns a pre-configured sysroot from RUSTOWL_SYSROOT environment variable.
+/// When set, this sysroot is used directly without toolchain downloading.
+pub fn get_configured_sysroot() -> Option<PathBuf> {
+    env::var("RUSTOWL_SYSROOT")
+        .ok()
+        .map(PathBuf::from)
+        .filter(|p| {
+            let exists = p.is_dir();
+            if exists {
+                log::info!(
+                    "Using pre-configured sysroot from RUSTOWL_SYSROOT: {}",
+                    p.display()
+                );
+            }
+            exists
+        })
+}
+
+/// Returns the runtime directory, respecting RUSTOWL_RUNTIME_DIR environment variable.
+/// Falls back to standard locations if not set.
 pub static FALLBACK_RUNTIME_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
+    // First check RUSTOWL_RUNTIME_DIR environment variable
+    if let Ok(runtime_dir) = env::var("RUSTOWL_RUNTIME_DIR") {
+        let path = PathBuf::from(&runtime_dir);
+        log::info!("Using RUSTOWL_RUNTIME_DIR: {}", path.display());
+        return path;
+    }
+
+    // If RUSTOWL_SYSROOT is set, derive runtime from its parent
+    if let Some(parent) = get_configured_sysroot().and_then(|sysroot| {
+        sysroot
+            .parent()
+            .and_then(|p| p.parent())
+            .map(|p| p.to_path_buf())
+    }) {
+        log::info!(
+            "Deriving runtime dir from RUSTOWL_SYSROOT: {}",
+            parent.display()
+        );
+        return parent;
+    }
+
     let opt = PathBuf::from("/opt/rustowl");
     if sysroot_from_runtime(&opt).is_dir() {
         return opt;
@@ -44,6 +85,17 @@ pub fn sysroot_from_runtime(runtime: impl AsRef<Path>) -> PathBuf {
 }
 
 async fn get_runtime_dir() -> PathBuf {
+    // First check for pre-configured sysroot
+    if let Some(sysroot) = get_configured_sysroot() {
+        log::info!("Using pre-configured sysroot, skipping toolchain setup");
+        // Return the runtime dir (two levels up from sysroot)
+        return sysroot
+            .parent()
+            .and_then(|p| p.parent())
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| FALLBACK_RUNTIME_DIR.clone());
+    }
+
     let sysroot = sysroot_from_runtime(&*FALLBACK_RUNTIME_DIR);
     if FALLBACK_RUNTIME_DIR.is_dir() && sysroot.is_dir() {
         return FALLBACK_RUNTIME_DIR.clone();
@@ -59,6 +111,10 @@ async fn get_runtime_dir() -> PathBuf {
 }
 
 pub async fn get_sysroot() -> PathBuf {
+    // First check for pre-configured sysroot from environment
+    if let Some(sysroot) = get_configured_sysroot() {
+        return sysroot;
+    }
     sysroot_from_runtime(get_runtime_dir().await)
 }
 

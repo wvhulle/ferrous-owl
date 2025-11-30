@@ -57,6 +57,8 @@ fn main() -> Result<(), Error> {
 }
 
 // get toolchain
+// Priority: RUSTUP_TOOLCHAIN > TOOLCHAIN_CHANNEL > scripts/build/channel
+// This allows building without rustup by setting TOOLCHAIN_CHANNEL or using the default
 fn get_toolchain() -> String {
     if let Ok(v) = env::var("RUSTUP_TOOLCHAIN") {
         v
@@ -64,7 +66,7 @@ fn get_toolchain() -> String {
         format!("{v}-{}", get_host_tuple())
     } else {
         let v = std::fs::read_to_string("./scripts/build/channel")
-            .expect("there are no toolchain specifier");
+            .unwrap_or_else(|_| "stable".to_string());
         format!("{}-{}", v.trim(), get_host_tuple())
     }
 }

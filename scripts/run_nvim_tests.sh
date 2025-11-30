@@ -3,7 +3,7 @@
 printf "\033[1;36m\n================= Rustowl Test Suite =================\n\033[0m\n\n"
 
 # Capture the output of the test run
-output=$(nvim --headless --noplugin -u ./nvim-tests/minimal_init.lua \
+output=$(nvim --headless --noplugin -u ./editors/neovim/nvim-tests/minimal_init.lua \
   -c "lua MiniTest.run()" \
   -c "qa" 2>&1)
 

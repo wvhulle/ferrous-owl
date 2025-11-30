@@ -36,35 +36,35 @@ else
   exit 1
 fi
 
-# 2. Update vscode/package.json
-if [ -f vscode/package.json ]; then
-  echo "Updating vscode/package.json..."
+# 2. Update editors/vscode/package.json
+if [ -f editors/vscode/package.json ]; then
+  echo "Updating editors/vscode/package.json..."
   # Use sed to replace the "version": "x.x.x" line
-  $sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION_WITHOUT_V\"/" vscode/package.json
+  $sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION_WITHOUT_V\"/" editors/vscode/package.json
 else
-  echo "Warning: vscode/package.json not found"
+  echo "Warning: editors/vscode/package.json not found"
 fi
 
-# 3. Update aur/PKGBUILD only for stable releases
-if [ "$IS_PRERELEASE" = false ] && [ -f aur/PKGBUILD ]; then
-  echo "Updating aur/PKGBUILD..."
+# 3. Update packages/aur/PKGBUILD only for stable releases
+if [ "$IS_PRERELEASE" = false ] && [ -f packages/aur/PKGBUILD ]; then
+  echo "Updating packages/aur/PKGBUILD..."
   # Use sed to replace the pkgver line
-  $sed -i "s/^pkgver=.*/pkgver=$VERSION_WITHOUT_V/" aur/PKGBUILD
-elif [ -f aur/PKGBUILD ]; then
-  echo "Skipping aur/PKGBUILD update for pre-release version"
+  $sed -i "s/^pkgver=.*/pkgver=$VERSION_WITHOUT_V/" packages/aur/PKGBUILD
+elif [ -f packages/aur/PKGBUILD ]; then
+  echo "Skipping packages/aur/PKGBUILD update for pre-release version"
 else
-  echo "Warning: aur/PKGBUILD not found"
+  echo "Warning: packages/aur/PKGBUILD not found"
 fi
 
-# 4. Update aur/PKGBUILD-BIN only for stable releases
-if [ "$IS_PRERELEASE" = false ] && [ -f aur/PKGBUILD-BIN ]; then
-  echo "Updating aur/PKGBUILD..."
+# 4. Update packages/aur/PKGBUILD-BIN only for stable releases
+if [ "$IS_PRERELEASE" = false ] && [ -f packages/aur/PKGBUILD-BIN ]; then
+  echo "Updating packages/aur/PKGBUILD-BIN..."
   # Use sed to replace the pkgver line
-  $sed -i "s/^pkgver=.*/pkgver=$VERSION_WITHOUT_V/" aur/PKGBUILD-BIN
-elif [ -f aur/PKGBUILD-BIN ]; then
-  echo "Skipping aur/PKGBUILD-BIN update for pre-release version"
+  $sed -i "s/^pkgver=.*/pkgver=$VERSION_WITHOUT_V/" packages/aur/PKGBUILD-BIN
+elif [ -f packages/aur/PKGBUILD-BIN ]; then
+  echo "Skipping packages/aur/PKGBUILD-BIN update for pre-release version"
 else
-  echo "Warning: aur/PKGBUILD-BIN not found"
+  echo "Warning: packages/aur/PKGBUILD-BIN not found"
 fi
 
 # 5. Create a git tag

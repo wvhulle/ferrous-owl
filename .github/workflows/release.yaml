@@ -118,7 +118,7 @@ jobs:
         if: needs.meta.outputs.pre_release != 'true'
         with:
           pkgname: rustowl
-          pkgbuild: ./aur/PKGBUILD
+          pkgbuild: ./packages/aur/PKGBUILD
           updpkgsums: true
           commit_username: ${{ secrets.AUR_USERNAME }}
           commit_email: ${{ secrets.AUR_EMAIL }}
@@ -134,7 +134,7 @@ jobs:
         if: needs.meta.outputs.pre_release != 'true'
         with:
           pkgname: rustowl-bin
-          pkgbuild: ./aur/PKGBUILD-BIN
+          pkgbuild: ./packages/aur/PKGBUILD-BIN
           updpkgsums: true
           commit_username: ${{ secrets.AUR_USERNAME }}
           commit_email: ${{ secrets.AUR_EMAIL }}
@@ -207,6 +207,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: packages/docker/Dockerfile
           push: true
           tags: |
             ghcr.io/${{ github.repository }}:latest

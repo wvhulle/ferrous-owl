@@ -140,16 +140,16 @@ jobs:
       - name: Setup PNPM And Install dependencies
         uses: pnpm/action-setup@v4
         with:
-          package_json_file: ./vscode/package.json
+          package_json_file: ./editors/vscode/package.json
           run_install: |
-            - cwd: ./vscode
+            - cwd: ./editors/vscode
 
       - name: Create VSIX
         run: pnpm build
-        working-directory: ./vscode
+        working-directory: ./editors/vscode
 
       - name: Upload
         uses: actions/upload-artifact@v5
         with:
           name: rustowl-vscode
-          path: vscode/**/*.vsix
+          path: editors/vscode/**/*.vsix
