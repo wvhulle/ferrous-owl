@@ -1,9 +1,12 @@
 //! Test fixture for RustOwl performance benchmarks.
 //!
-//! Contains representative Rust patterns with ownership, borrowing, and lifetime scenarios.
+//! Contains representative Rust patterns with ownership, borrowing, and
+//! lifetime scenarios.
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 /// Container with ownership patterns for RustOwl to analyze.
 #[derive(Debug, Clone)]

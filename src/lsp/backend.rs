@@ -313,6 +313,7 @@ impl Backend {
                     log::warn!("Got {} decorations", decos.len());
                     decos
                         .into_iter()
+                        .filter(decoration::Deco::should_show_as_diagnostic)
                         .map(|d| d.to_lsp_range(&text).to_diagnostic())
                         .collect()
                 }

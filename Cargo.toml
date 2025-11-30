@@ -16,10 +16,6 @@ version = "0.0.1"
 [package.metadata.rust-analyzer]
 rustc_private = true
 
-[[bin]]
-name = "rustowl"
-path = "src/main.rs"
-test = false
 
 [[bench]]
 harness = false

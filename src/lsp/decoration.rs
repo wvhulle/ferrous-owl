@@ -9,20 +9,26 @@ use crate::{
 };
 
 impl<R> Deco<R> {
+    /// Returns whether this decoration should be shown as a diagnostic.
+    /// Lifetime decorations are filtered out as they are too verbose.
+    pub const fn should_show_as_diagnostic(&self) -> bool {
+        !matches!(self, Self::Lifetime { .. })
+    }
+
     /// Returns the diagnostic severity for this decoration type.
     /// Each type gets a distinct severity for better visual differentiation:
-    /// - Outlive, `SharedMut` -> Error (red - critical ownership issues)
-    /// - Move -> Warning (yellow/orange - ownership transfer)
-    /// - `MutBorrow` -> Information (blue - mutable access)
-    /// - `ImmBorrow`, Call, Lifetime -> Hint (gray/dim - informational)
+    /// - Outlive -> Error (red - critical ownership issues)
+    /// - `SharedMut`, Move -> Warning (yellow/orange - ownership/aliasing)
+    /// - `MutBorrow`, Call -> Information (blue - mutable access/calls)
+    /// - `ImmBorrow`, Lifetime -> Hint (gray/dim - immutable borrow info)
     pub const fn diagnostic_severity(&self) -> lsp_types::DiagnosticSeverity {
         match self {
-            Self::Outlive { .. } | Self::SharedMut { .. } => lsp_types::DiagnosticSeverity::ERROR,
-            Self::Move { .. } => lsp_types::DiagnosticSeverity::WARNING,
-            Self::MutBorrow { .. } => lsp_types::DiagnosticSeverity::INFORMATION,
-            Self::ImmBorrow { .. } | Self::Call { .. } | Self::Lifetime { .. } => {
-                lsp_types::DiagnosticSeverity::HINT
+            Self::Outlive { .. } => lsp_types::DiagnosticSeverity::ERROR,
+            Self::SharedMut { .. } | Self::Move { .. } => lsp_types::DiagnosticSeverity::WARNING,
+            Self::MutBorrow { .. } | Self::Call { .. } => {
+                lsp_types::DiagnosticSeverity::INFORMATION
             }
+            Self::ImmBorrow { .. } | Self::Lifetime { .. } => lsp_types::DiagnosticSeverity::HINT,
         }
     }
 
