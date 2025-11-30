@@ -25,19 +25,16 @@ RustOwl uses colored underlines:
 - 🟧 Orange: value moved / function call
 - 🟥 Red: lifetime error (invalid overlap or mismatch)
 
-## Supported Editors
-
-- VS Code extension
-- Neovim plugin
-- Emacs package
-
 Move the cursor over a variable or function call and wait ~2 seconds to visualize info. RustOwl uses an extended LSP protocol, so it can be integrated with other editors.
 
 ## Installation
 
+First install the `rustowl` binary:
+
 - Package managers: see [installation/README.md](installation/README.md)
 - Build from source: see [installation/source/README.md](installation/source/README.md)
-- Editor setup: see [editors/](./editors/)
+
+Then, complete the editor setup: see [editors/](./editors/)
 
 ## Getting Started
 

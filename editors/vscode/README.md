@@ -9,6 +9,10 @@ Visualizes ownership and lifetimes in Rust code.
 - [Node.js](https://nodejs.org/) v20+
 - [pnpm](https://pnpm.io/) (`npm install -g pnpm`)
 
+## Installation
+
+See [INSTALLATION.md](INSTALLATION.md) for installation instructions.
+
 ## Development
 
 Install dependencies:
@@ -30,3 +34,7 @@ pnpm test
 ```bash
 pnpm run package
 ```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.

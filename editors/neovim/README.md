@@ -4,17 +4,19 @@ Visualizes ownership and lifetimes in Rust code.
 
 ## Prerequisites
 
-- [RustOwl](https://github.com/cordx56/rustowl) installed
 - Neovim 0.10+
 - [lazy.nvim](https://github.com/folke/lazy.nvim) (recommended)
+- Rust toolchain (for building RustOwl from source)
 
 ## Installation
+
+RustOwl must be compiled from source. The plugin will build it automatically on installation:
 
 ```lua
 {
   'cordx56/rustowl',
   version = '*',
-  build = 'cargo binstall rustowl',
+  build = 'cargo install --path . --locked',
   lazy = false,
   opts = {},
 }
@@ -77,3 +79,19 @@ require('rustowl').disable()
 require('rustowl').toggle()
 require('rustowl').is_enabled()
 ```
+
+## Contributing
+
+### Development Prerequisites
+
+- Neovim 0.10+ installed and available in PATH
+
+### Running Tests
+
+Run the test suite:
+
+```bash
+./test.sh
+```
+
+This will execute all plugin tests using the Neovim test framework.
