@@ -6,17 +6,16 @@ use std::{
 
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
-    process,
+    process::{self, Command},
     sync::{Notify, mpsc},
     task,
 };
 
-use crate::{
-    cache::{is_cache, set_cache_path},
-    compiler,
-    models::Workspace,
-    toolchain,
-};
+use crate::{compiler, models::Workspace, toolchain};
+
+fn set_cache_path(cmd: &mut Command, target_dir: impl AsRef<Path>) {
+    cmd.env(toolchain::CACHE_DIR_ENV, target_dir.as_ref().join("cache"));
+}
 
 #[derive(serde::Deserialize, Clone, Debug)]
 pub struct CargoCheckMessageTarget {
@@ -141,9 +140,7 @@ impl Analyzer {
             .stdout(Stdio::piped())
             .kill_on_drop(true);
 
-        if is_cache() {
-            set_cache_path(&mut command, target_dir);
-        }
+        set_cache_path(&mut command, target_dir);
 
         if log::max_level()
             .to_level()
@@ -168,7 +165,7 @@ impl Analyzer {
                     serde_json::from_str(&line)
                 {
                     let checked = target.name;
-                    log::info!("crate {checked} checked");
+                    log::debug!("crate {checked} checked");
 
                     let event = AnalyzerEvent::CrateChecked {
                         package: checked,
@@ -181,7 +178,7 @@ impl Analyzer {
                     let _ = sender.send(event).await;
                 }
             }
-            log::info!("stdout closed");
+            log::debug!("stdout closed");
             notify_c.notify_one();
         });
 
@@ -203,33 +200,21 @@ impl Analyzer {
 
         log::info!("start analyzing {}", path.display());
 
-        // Build args for in-process compiler
-        let mut args = vec![
-            "rustowl".to_string(), // program name
-            "rustowl".to_string(), // triggers workspace wrapper mode
-            format!("--sysroot={}", sysroot.display()),
-            "--crate-type=lib".to_string(),
-        ];
-        #[cfg(unix)]
-        args.push("-o/dev/null".to_string());
-        #[cfg(windows)]
-        args.push("-oNUL".to_string());
-        args.push(path.to_string_lossy().to_string());
-
-        // Run compiler in a separate thread with panic handling
         let _handle = tokio::spawn(async move {
-            let (mut ws_receiver, compiler_handle) = compiler::run_compiler_in_thread(args);
+            let handle = compiler::spawn_analysis(&path, &sysroot);
 
-            // Receive results asynchronously
-            while let Some(ws) = ws_receiver.recv().await {
+            let compiler::AnalysisHandle {
+                mut results,
+                thread,
+            } = handle;
+            while let Some(ws) = results.recv().await {
                 let event = AnalyzerEvent::Analyzed(ws);
                 if sender.send(event).await.is_err() {
                     break;
                 }
             }
 
-            // Wait for compiler thread to finish (blocking, but compiler should be done)
-            let join_result = task::spawn_blocking(move || compiler_handle.join()).await;
+            let join_result = task::spawn_blocking(move || thread.join()).await;
             match join_result {
                 Ok(Ok(Ok(_))) => log::info!("Compiler finished successfully"),
                 Ok(Ok(Err(e))) => log::warn!("Compiler error: {e}"),

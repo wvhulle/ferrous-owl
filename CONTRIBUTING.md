@@ -1,4 +1,4 @@
-# Contributing to RustOwl
+# Contributing to FerrousOwl
 
 ## Required checks
 

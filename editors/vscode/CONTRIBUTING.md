@@ -1,12 +1,13 @@
-# VS Code Extension Contributing Guide
+# Contributing
 
 ## Prerequisites
 
+- [FerrousOwl](https://github.com/wvhulle/ferrous-owl) Rust binary installed
 - [VS Code](https://code.visualstudio.com/)
 - [Node.js](https://nodejs.org/) v20+
 - [pnpm](https://pnpm.io/) (`npm install -g pnpm`)
 
-## Development Workflow
+## Development
 
 Install dependencies:
 
@@ -14,30 +15,16 @@ Install dependencies:
 pnpm install --frozen-lockfile
 ```
 
-Format code:
+Launch a development instance with the extension loaded using VS Code and the `.vscode/launch.json` file.
 
-```bash
-pnpm fmt
-```
-
-Lint code:
-
-```bash
-pnpm lint
-```
-
-Type check:
-
-```bash
-pnpm check-types
-```
-
-Run tests:
+## Testing
 
 ```bash
 pnpm test
 ```
 
-## Testing
+## Building
 
-Open this directory in VS Code and press `F5` to launch a development instance with the extension loaded.
+```bash
+pnpm run package
+```

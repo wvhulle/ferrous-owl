@@ -82,7 +82,7 @@ impl MirAnalyzer {
         let path = file_name.to_path(rustc_span::FileNameDisplayPreference::Local);
         let source = read_to_string(path).unwrap();
         let file_name = path.to_string_lossy().to_string();
-        log::info!("facts of {fn_id:?} prepared; start analyze of {fn_id:?}");
+        log::debug!("facts of {fn_id:?} prepared; start analyze of {fn_id:?}");
 
         // collect local declared vars
         // this must be done in local thread
@@ -109,7 +109,7 @@ impl MirAnalyzer {
         if let Some(cache) = cache.as_mut()
             && let Some(analyzed) = cache.get_cache(&file_hash, &mir_hash)
         {
-            log::info!("MIR cache hit: {fn_id:?}");
+            log::debug!("MIR cache hit: {fn_id:?}");
             return MirAnalyzerInitResult::Cached(AnalyzeResult {
                 file_name,
                 file_hash,
@@ -138,11 +138,11 @@ impl MirAnalyzer {
         let borrow_data = transform::BorrowMap::new(&facts.borrow_set);
 
         let analyzer = Box::pin(async move {
-            log::info!("start re-computing borrow check with dump: true");
+            log::debug!("start re-computing borrow check with dump: true");
             // compute accurate region, which may eliminate invalid region
             let output_datafrog =
                 PoloniusOutput::compute(&input, polonius_engine::Algorithm::DatafrogOpt, true);
-            log::info!("borrow check finished");
+            log::debug!("borrow check finished");
 
             let accurate_live = polonius_analyzer::get_accurate_live(
                 &output_datafrog,

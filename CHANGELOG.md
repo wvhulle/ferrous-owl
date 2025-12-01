@@ -1,6 +1,6 @@
 # Changelog
 
-## Forked - 2025-11-30
+## Forked as FerrousOwl - 2025-11-30
 
 This repo was forked by @wvhulle from  <https://github.com/cordx56/rustowl>.
 

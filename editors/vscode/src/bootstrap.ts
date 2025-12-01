@@ -7,17 +7,79 @@ import packageJson from "../package.json";
 
 const version: string = packageJson.version;
 
-const REPO_URL = "https://github.com/wvhulle/rustowl.git";
-const CACHE_DIR = path.join(os.homedir(), ".cache", "rustowl");
+const REPO_URL = "https://github.com/wvhulle/ferrous-owl.git";
+const CACHE_DIR = path.join(os.homedir(), ".cache", "ferrous-owl");
 const CARGO_BIN = path.join(os.homedir(), ".cargo", "bin");
 const EXE_EXT = process.platform === "win32" ? ".exe" : "";
 
-interface RustowlConfig {
+const getProjectRootFromExtension = (extensionPath: string): string =>
+  path.dirname(path.dirname(extensionPath));
+
+const buildDebugBinary = async (projectRoot: string): Promise<boolean> =>
+  vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: "FerrousOwl: Building debug binary",
+      cancellable: false,
+    },
+    async (progress) => {
+      try {
+        progress.report({ message: "Running cargo build..." });
+        
+        const cargoBuild = spawn("cargo", ["build"], {
+          cwd: projectRoot,
+        });
+
+        cargoBuild.stderr.on("data", (data: Buffer) => {
+          const line = String(data).trim();
+          if (line.includes("Compiling")) {
+            progress.report({ message: line });
+          }
+        });
+
+        await waitForProcess(cargoBuild, "cargo build");
+        
+        progress.report({ message: "Debug build complete" });
+        return true;
+      } catch (e) {
+        console.error("Debug build failed:", e);
+        return false;
+      }
+    }
+  );
+
+const findLocalDevBinary = async (extensionPath: string): Promise<string | null> => {
+  const projectRoot = getProjectRootFromExtension(extensionPath);
+  const candidate = path.join(projectRoot, "target", "debug", `ferrous-owl${EXE_EXT}`);
+  
+  if (await exists(candidate)) {
+    const ver = getVersionOutput(candidate, ["--version", "--quiet"]);
+    if (ver) {
+      console.warn(`Found local dev binary: ${candidate}`);
+      return candidate;
+    }
+  }
+  
+  console.warn(`Debug binary not found at ${candidate}, building...`);
+  if (await buildDebugBinary(projectRoot)) {
+    if (await exists(candidate)) {
+      const ver = getVersionOutput(candidate, ["--version", "--quiet"]);
+      if (ver) {
+        console.warn(`Built local dev binary: ${candidate}`);
+        return candidate;
+      }
+    }
+  }
+  
+  return null;
+};
+
+interface FerrousOwlConfig {
   readonly serverPath: string;
 }
 
-const getConfig = (): RustowlConfig => ({
-  serverPath: vscode.workspace.getConfiguration("rustowl").get<string>("serverPath", ""),
+const getConfig = (): FerrousOwlConfig => ({
+  serverPath: vscode.workspace.getConfiguration("ferrous-owl").get<string>("serverPath", ""),
 });
 
 const getVersionOutput = (command: string, args: string[]): string => {
@@ -46,7 +108,7 @@ const waitForProcess = (proc: ReturnType<typeof spawn>, name: string): Promise<v
 export const needsUpdate = async (currentVersion: string): Promise<boolean> => {
   if (!currentVersion) {return true;}
   
-  console.warn(`Current RustOwl version: ${currentVersion}`);
+  console.warn(`Current FerrousOwl version: ${currentVersion}`);
   console.warn(`Extension version: v${version}`);
   
   try {
@@ -67,7 +129,7 @@ export const needsUpdate = async (currentVersion: string): Promise<boolean> => {
 // TODO: Re-enable when package is published to crates.io
 const _tryBinstall = async (): Promise<boolean> =>
   vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: "RustOwl: Trying cargo-binstall..." },
+    { location: vscode.ProgressLocation.Notification, title: "FerrousOwl: Trying cargo-binstall..." },
     async (progress) => {
       if (!commandExists("cargo-binstall")) {
         progress.report({ message: "cargo-binstall not found, skipping" });
@@ -76,7 +138,7 @@ const _tryBinstall = async (): Promise<boolean> =>
       
       try {
         progress.report({ message: "Installing via cargo-binstall..." });
-        const proc = spawn("cargo-binstall", ["--no-confirm", "rustowl"], { stdio: "pipe" });
+        const proc = spawn("cargo-binstall", ["--no-confirm", "ferrous-owl"], { stdio: "pipe" });
         await waitForProcess(proc, "cargo-binstall");
         return true;
       } catch {
@@ -116,7 +178,7 @@ const buildFromSource = async (): Promise<boolean> =>
   vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: "RustOwl: Building from source",
+      title: "FerrousOwl: Building from source",
       cancellable: false,
     },
     async (progress) => {
@@ -148,7 +210,7 @@ const buildFromSource = async (): Promise<boolean> =>
   );
 
 const createSymlink = async (binaryPath: string): Promise<void> => {
-  const symlinkPath = path.join(CARGO_BIN, `rustowl${EXE_EXT}`);
+  const symlinkPath = path.join(CARGO_BIN, `ferrous-owl${EXE_EXT}`);
   
   if (await exists(symlinkPath)) {
     const stat = await fs.lstat(symlinkPath);
@@ -165,10 +227,10 @@ const createSymlink = async (binaryPath: string): Promise<void> => {
   }
 };
 
-const findRustowlBinary = async (): Promise<string | null> => {
+const findFerrousOwlBinary = async (): Promise<string | null> => {
   const locations = [
-    path.join(CARGO_BIN, `rustowl${EXE_EXT}`),
-    path.join(CACHE_DIR, "target", "release", `rustowl${EXE_EXT}`),
+    path.join(CARGO_BIN, `ferrous-owl${EXE_EXT}`),
+    path.join(CACHE_DIR, "target", "release", `ferrous-owl${EXE_EXT}`),
   ];
   
   for (const loc of locations) {
@@ -178,16 +240,16 @@ const findRustowlBinary = async (): Promise<string | null> => {
     }
   }
   
-  const globalVer = getVersionOutput("rustowl", ["--version", "--quiet"]);
-  if (globalVer) {return "rustowl";}
+  const globalVer = getVersionOutput("ferrous-owl", ["--version", "--quiet"]);
+  if (globalVer) {return "ferrous-owl";}
   
   return null;
 };
 
-export const installRustowl = async (): Promise<string> => {
+export const installFerrousOwl = async (): Promise<string> => {
   if (!commandExists("cargo") || !commandExists("git")) {
     throw new Error(
-      "RustOwl requires cargo and git. Please install Rust via rustup.rs and ensure git is available."
+      "FerrousOwl requires cargo and git. Please install Rust via rustup.rs and ensure git is available."
     );
   }
 
@@ -200,7 +262,7 @@ export const installRustowl = async (): Promise<string> => {
   // }
 
   if (await buildFromSource()) {
-    const targetBinary = path.join(CACHE_DIR, "target", "release", `rustowl${EXE_EXT}`);
+    const targetBinary = path.join(CACHE_DIR, "target", "release", `ferrous-owl${EXE_EXT}`);
     if (await exists(targetBinary)) {
       // Create symlink in background, don't wait - avoids disrupting any running server
       void createSymlink(targetBinary);
@@ -210,15 +272,18 @@ export const installRustowl = async (): Promise<string> => {
   }
 
   void vscode.window.showErrorMessage(
-    "RustOwl installation failed. Please install manually:\n" +
-    "git clone https://github.com/wvhulle/rustowl.git ~/.cache/rustowl\n" +
-    "cd ~/.cache/rustowl && cargo build --release --locked"
+    "FerrousOwl installation failed. Please install manually:\n" +
+    "git clone https://github.com/wvhulle/ferrous-owl.git ~/.cache/ferrous-owl\n" +
+    "cd ~/.cache/ferrous-owl && cargo build --release --locked"
   );
   
-  throw new Error("Failed to install RustOwl");
+  throw new Error("Failed to install FerrousOwl");
 };
 
-export const bootstrapRustowl = async (_dirPath: string): Promise<string> => {
+export const bootstrapFerrousOwl = async (
+  extensionPath: string,
+  extensionMode?: vscode.ExtensionMode,
+): Promise<string> => {
   const config = getConfig();
 
   if (config.serverPath) {
@@ -227,10 +292,21 @@ export const bootstrapRustowl = async (_dirPath: string): Promise<string> => {
       console.warn(`Using configured serverPath: ${config.serverPath}`);
       return config.serverPath;
     }
-    throw new Error(`Configured serverPath "${config.serverPath}" is not a valid rustowl executable`);
+    throw new Error(`Configured serverPath "${config.serverPath}" is not a valid ferrous-owl executable`);
   }
 
-  const existingBinary = await findRustowlBinary();
+  const isDevelopment = extensionMode === vscode.ExtensionMode.Development;
+  
+  if (isDevelopment && extensionPath) {
+    const localBinary = await findLocalDevBinary(extensionPath);
+    if (localBinary) {
+      console.warn(`Development mode: using local binary ${localBinary}`);
+      return localBinary;
+    }
+    console.warn("Development mode: no local binary found, falling back to normal bootstrap");
+  }
+
+  const existingBinary = await findFerrousOwlBinary();
   
   if (existingBinary) {
     const currentVersion = getVersionOutput(existingBinary, ["--version", "--quiet"]);
@@ -240,11 +316,11 @@ export const bootstrapRustowl = async (_dirPath: string): Promise<string> => {
       // Don't auto-update - just warn the user and use existing binary
       // Auto-updating can kill running servers in other VS Code windows
       void vscode.window.showWarningMessage(
-        `RustOwl update available (${currentVersion} → v${version}). Run "RustOwl: Update" command to update.`,
+        `FerrousOwl update available (${currentVersion} → v${version}). Run "FerrousOwl: Update" command to update.`,
         "Update Now"
       ).then(async (choice) => {
         if (choice === "Update Now") {
-          await vscode.commands.executeCommand("rustowl.update");
+          await vscode.commands.executeCommand("ferrous-owl.update");
         }
       });
     }
@@ -253,5 +329,5 @@ export const bootstrapRustowl = async (_dirPath: string): Promise<string> => {
   }
 
   // No existing binary found - install
-  return installRustowl();
+  return installFerrousOwl();
 };

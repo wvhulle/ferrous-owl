@@ -58,12 +58,10 @@ rustPlatform.buildRustPackage {
     stdenv.cc.cc.lib
   ];
 
-  # Tell autoPatchelfHook to skip rustowlc - we handle librustc_driver via LD_LIBRARY_PATH
   autoPatchelfIgnoreMissingDeps = [ "librustc_driver-*.so" ];
 
   env = {
     RUSTC_BOOTSTRAP = "1";
-    # TOOLCHAIN_CHANNEL is used by build.rs when RUSTUP_TOOLCHAIN is not set
     TOOLCHAIN_CHANNEL = "stable";
     LLVM_CONFIG = "${llvmPackages_19.llvm.dev}/bin/llvm-config";
   };
@@ -73,16 +71,10 @@ rustPlatform.buildRustPackage {
   '';
 
   postInstall = ''
-    # Use nixpkgs rustc sysroot - it matches the rustc used to compile rustowlc
     sysroot="${rustc.unwrapped}"
 
-    # RUSTOWL_SYSROOT tells rustowl to use the nixpkgs rustc sysroot directly,
-    # skipping any toolchain download attempts
-    wrapProgram $out/bin/rustowl \
+    wrapProgram $out/bin/ferrous-owl \
       --set RUSTOWL_SYSROOT "$sysroot" \
-      --prefix LD_LIBRARY_PATH : "${rustc.unwrapped}/lib"
-
-    wrapProgram $out/bin/rustowlc \
       --prefix LD_LIBRARY_PATH : "${rustc.unwrapped}/lib"
   '';
 

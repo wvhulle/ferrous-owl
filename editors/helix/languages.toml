@@ -1,6 +1,6 @@
-[language-server.rustowl]
-command = "rustowl"
+[language-server.ferrous-owl]
+command = "ferrous-owl"
 
 [[language]]
-language-servers = ["rust-analyzer", "rustowl"]
+language-servers = ["rust-analyzer", "ferrous-owl"]
 name = "rust"

@@ -1,11 +1,10 @@
 import * as vscode from "vscode";
 import type { Range } from "vscode-languageserver-types";
 
-import { bootstrapRustowl, installRustowl } from "./bootstrap";
+import { bootstrapFerrousOwl, installFerrousOwl } from "./bootstrap";
 import {
   LanguageClient,
   type Executable,
-  TransportKind,
   type LanguageClientOptions,
   State,
   ErrorAction,
@@ -13,7 +12,7 @@ import {
   type ErrorHandler,
 } from "vscode-languageclient/node";
 
-type DisplayMode = "selected" | "hover" | "manual" | "disabled";
+type DisplayMode = "selected" | "manual" | "disabled";
 
 type LspDecorationType =
   | "lifetime"
@@ -42,7 +41,7 @@ export let client: LanguageClient | undefined = undefined;
 let decoTimer: NodeJS.Timeout | null = null;
 
 const getConfig = (): vscode.WorkspaceConfiguration =>
-  vscode.workspace.getConfiguration("rustowl");
+  vscode.workspace.getConfiguration("ferrous-owl");
 
 const getDisplayMode = (): DisplayMode =>
   getConfig().get<DisplayMode>("displayMode", "selected");
@@ -172,11 +171,11 @@ class StatusBarManager {
 
   constructor() {
     this.statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
-    this.statusBar.text = "RustOwl";
+    this.statusBar.text = "FerrousOwl";
     this.statusBar.command = {
-      command: "rustowl.cycleDisplayMode",
+      command: "ferrous-owl.cycleDisplayMode",
       title: "Cycle display mode",
-      tooltip: "Cycle RustOwl display mode",
+      tooltip: "Cycle FerrousOwl display mode",
     };
     this.statusBar.show();
   }
@@ -184,15 +183,15 @@ class StatusBarManager {
   public updateFromLspStatus(status: string): void {
     switch (status) {
       case "finished":
-        this.statusBar.text = "$(check) RustOwl";
+        this.statusBar.text = "$(check) FerrousOwl";
         this.statusBar.tooltip = "Analysis finished";
         break;
       case "analyzing":
-        this.statusBar.text = "$(loading~spin) RustOwl";
+        this.statusBar.text = "$(loading~spin) FerrousOwl";
         this.statusBar.tooltip = "Analyzing...";
         break;
       default:
-        this.statusBar.text = "$(error) RustOwl";
+        this.statusBar.text = "$(error) FerrousOwl";
         this.statusBar.tooltip = "Analysis failed";
     }
     this.statusBar.show();
@@ -201,12 +200,11 @@ class StatusBarManager {
   public updateFromDisplayMode(mode: DisplayMode): void {
     const modeConfig: Record<DisplayMode, { icon: string; tooltip: string }> = {
       selected: { icon: "check", tooltip: "Display mode: selected" },
-      hover: { icon: "eye", tooltip: "Display mode: hover" },
       manual: { icon: "tools", tooltip: "Display mode: manual" },
       disabled: { icon: "debug-pause", tooltip: "Display mode: disabled" },
     };
     const config = modeConfig[mode];
-    this.statusBar.text = `$(${config.icon}) RustOwl`;
+    this.statusBar.text = `$(${config.icon}) FerrousOwl`;
     this.statusBar.tooltip = config.tooltip;
     this.statusBar.show();
   }
@@ -216,58 +214,129 @@ class StatusBarManager {
   }
 }
 
+interface ServerState {
+  lastError: string | null;
+  startCount: number;
+}
+
+const createErrorHandler = (
+  statusBarManager: StatusBarManager,
+  outputChannel: vscode.LogOutputChannel,
+  serverState: ServerState,
+  command: string,
+): ErrorHandler => ({
+  error: (error, message, count) => {
+    const errorCount = count ?? 0;
+    serverState.lastError = `${error.name}: ${error.message}`;
+    
+    outputChannel.error(`LSP error #${errorCount}: ${error.name}`);
+    outputChannel.error(`  Message: ${error.message}`);
+    if (message) {
+      outputChannel.error(`  LSP Message: ${JSON.stringify(message)}`);
+    }
+    outputChannel.error(`  Stack: ${error.stack ?? "N/A"}`);
+    
+    console.error(`FerrousOwl LSP error (${errorCount}):`, error, message);
+    statusBarManager.updateFromLspStatus("error");
+    
+    if (errorCount >= 3) {
+      void vscode.window.showErrorMessage(
+        `FerrousOwl server keeps failing: ${serverState.lastError}. ` +
+        "Try running 'FerrousOwl: Update' command to rebuild.",
+        "Show Logs",
+        "Update"
+      ).then((choice) => {
+        if (choice === "Show Logs") {
+          outputChannel.show();
+        } else if (choice === "Update") {
+            void vscode.commands.executeCommand("ferrous-owl.update");
+        }
+      });
+      return { action: ErrorAction.Shutdown };
+    }
+    return { action: ErrorAction.Continue };
+  },
+  closed: () => {
+    serverState.startCount++;
+    const errorInfo = serverState.lastError ? ` Last error: ${serverState.lastError}` : "";
+    
+    outputChannel.warn(`Server connection closed (attempt ${serverState.startCount}).${errorInfo}`);
+    outputChannel.warn(`Server command: ${command}`);
+    
+    console.warn(`FerrousOwl LSP connection closed (attempt ${serverState.startCount}).${errorInfo}`);
+    statusBarManager.updateFromLspStatus("error");
+    
+    if (serverState.startCount >= 3) {
+      void vscode.window.showErrorMessage(
+        `FerrousOwl server crashed ${serverState.startCount} times.${errorInfo} ` +
+        "The server binary may be corrupted or incompatible.",
+        "Show Logs",
+        "Update Server"
+      ).then((choice) => {
+        if (choice === "Show Logs") {
+          outputChannel.show();
+        } else if (choice === "Update Server") {
+          void vscode.commands.executeCommand("ferrous-owl.update");
+        }
+      });
+      return { action: CloseAction.DoNotRestart };
+    }
+    
+    void vscode.window.showWarningMessage(
+      `FerrousOwl server stopped unexpectedly.${errorInfo} Restart?`,
+      "Restart",
+      "Show Logs",
+      "Ignore"
+    ).then((choice) => {
+      if (choice === "Restart") {
+        void vscode.commands.executeCommand("ferrous-owl.restart");
+      } else if (choice === "Show Logs") {
+        outputChannel.show();
+      }
+    });
+    
+    return { action: CloseAction.DoNotRestart };
+  },
+});
+
 const initializeClient = async (
   context: vscode.ExtensionContext,
   clientOptions: LanguageClientOptions,
   statusBarManager: StatusBarManager,
 ): Promise<void> => {
-  const command = await bootstrapRustowl(context.globalStorageUri.fsPath);
+  const command = await bootstrapFerrousOwl(
+    context.extensionPath,
+    context.extensionMode,
+  );
+  
+  const outputChannel = vscode.window.createOutputChannel("FerrousOwl Server", { log: true });
+  context.subscriptions.push(outputChannel);
+
+  const isDevelopment = context.extensionMode === vscode.ExtensionMode.Development;
+  
   const serverOptions: Executable = {
     command,
-    transport: TransportKind.stdio,
+    options: {
+      env: {
+        ...process.env,
+        RUST_LOG: isDevelopment ? "debug" : "info",
+      },
+    },
   };
 
-  // Custom error handler to detect server crashes and malformed responses
-  const errorHandler: ErrorHandler = {
-    error: (error, message, count) => {
-      console.error(`RustOwl LSP error (${count ?? 0}):`, error, message);
-      statusBarManager.updateFromLspStatus("error");
-      
-      // Don't restart on repeated errors - likely a fundamental issue
-      if ((count ?? 0) >= 3) {
-        void vscode.window.showErrorMessage(
-          "RustOwl server keeps failing. The server binary may be incompatible. " +
-          "Try running 'RustOwl: Update' command to rebuild."
-        );
-        return { action: ErrorAction.Shutdown };
-      }
-      return { action: ErrorAction.Continue };
-    },
-    closed: () => {
-      console.warn("RustOwl LSP connection closed unexpectedly");
-      statusBarManager.updateFromLspStatus("error");
-      
-      // Don't auto-restart - let user decide
-      void vscode.window.showWarningMessage(
-        "RustOwl server stopped unexpectedly. Restart?",
-        "Restart",
-        "Ignore"
-      ).then((choice) => {
-        if (choice === "Restart") {
-          void vscode.commands.executeCommand("rustowl.restart");
-        }
-      });
-      
-      return { action: CloseAction.DoNotRestart };
-    },
-  };
+  const serverState: ServerState = { lastError: null, startCount: 0 };
+  const errorHandler = createErrorHandler(statusBarManager, outputChannel, serverState, command);
 
   const fullClientOptions: LanguageClientOptions = {
     ...clientOptions,
     errorHandler,
+    outputChannel,
+    traceOutputChannel: outputChannel,
   };
 
-  client = new LanguageClient("rustowl", "RustOwl", serverOptions, fullClientOptions);
+  client = new LanguageClient("ferrous-owl", "FerrousOwl", serverOptions, fullClientOptions);
+  
+  outputChannel.info(`Starting FerrousOwl server: ${command}`);
   
   client.onDidChangeState((e) => {
     const stateNames = new Map<number, string>([
@@ -277,9 +346,13 @@ const initializeClient = async (
     ]);
     const oldName = stateNames.get(e.oldState) ?? String(e.oldState);
     const newName = stateNames.get(e.newState) ?? String(e.newState);
-    console.warn(`RustOwl client state: ${oldName} -> ${newName}`);
+    
+    outputChannel.info(`Client state: ${oldName} -> ${newName}`);
+    console.warn(`FerrousOwl client state: ${oldName} -> ${newName}`);
     
     if (e.newState === State.Running) {
+      serverState.startCount = 0;
+      serverState.lastError = null;
       statusBarManager.updateFromDisplayMode(getDisplayMode());
     }
   });
@@ -299,7 +372,7 @@ const sendCursorRequest = async (
   position: vscode.Position,
   uri: vscode.Uri,
 ): Promise<LspCursorResponse | null> => {
-  const resp = await client?.sendRequest("rustowl/cursor", {
+  const resp = await client?.sendRequest("ferrous-owl/cursor", {
     position: { line: position.line, character: position.character },
     document: { uri: uri.toString() },
   });
@@ -310,18 +383,21 @@ const createClientWithOptions = (
   command: string,
   clientOptions: LanguageClientOptions,
 ): LanguageClient =>
-  new LanguageClient("rustowl", "RustOwl", {
+  new LanguageClient("ferrous-owl", "FerrousOwl", {
     command,
-    transport: TransportKind.stdio,
   } satisfies Executable, clientOptions);
 
-const restartClient = async (clientOptions: LanguageClientOptions): Promise<void> => {
+const restartClient = async (
+  clientOptions: LanguageClientOptions,
+  extensionPath: string,
+  extensionMode?: vscode.ExtensionMode,
+): Promise<void> => {
   if (client?.isRunning()) {
     await client.stop();
   }
   client = undefined;
 
-  const binary = await bootstrapRustowl("");
+  const binary = await bootstrapFerrousOwl(extensionPath, extensionMode);
   client = createClientWithOptions(binary, clientOptions);
   await client.start();
 };
@@ -332,7 +408,7 @@ const updateAndRestartClient = async (clientOptions: LanguageClientOptions): Pro
   }
   client = undefined;
 
-  const newBinary = await installRustowl();
+  const newBinary = await installFerrousOwl();
   client = createClientWithOptions(newBinary, clientOptions);
   await client.start();
 };
@@ -362,70 +438,46 @@ const registerCommands = (
     context.subscriptions.push(vscode.commands.registerCommand(id, handler));
   };
 
-  registerCommand("rustowl.hover", async () => {
+  registerCommand("ferrous-owl.hover", async () => {
     const editor = activeEditorRef.current;
     if (editor) {
       await handleCursorRequest(editor, editor.selection.active);
     }
   });
 
-  registerCommand("rustowl.cycleDisplayMode", async () => {
-    const modes: DisplayMode[] = ["selected", "hover", "manual", "disabled"];
+  registerCommand("ferrous-owl.cycleDisplayMode", async () => {
+    const modes: DisplayMode[] = ["selected", "manual", "disabled"];
     const current = getDisplayMode();
     const nextMode = modes[(modes.indexOf(current) + 1) % modes.length];
     await getConfig().update("displayMode", nextMode, vscode.ConfigurationTarget.Global);
-    void vscode.window.showInformationMessage(`RustOwl display mode: ${nextMode}`);
+    void vscode.window.showInformationMessage(`FerrousOwl display mode: ${nextMode}`);
   });
 
-  registerCommand("rustowl.toggle", async () => {
+  registerCommand("ferrous-owl.toggle", async () => {
     const current = getDisplayMode();
     const newMode = current === "disabled" ? "selected" : "disabled";
     await getConfig().update("displayMode", newMode, vscode.ConfigurationTarget.Global);
     void vscode.window.showInformationMessage(
-      `RustOwl ${newMode === "disabled" ? "disabled" : "enabled"}`,
+      `FerrousOwl ${newMode === "disabled" ? "disabled" : "enabled"}`,
     );
   });
 
-  registerCommand(
-    "rustowl.toggleOwnership",
-    async (uri?: string, line?: number, character?: number) => {
-      const args =
-        uri && typeof line === "number" && typeof character === "number"
-          ? [uri, line, character]
-          : activeEditorRef.current
-            ? [
-                activeEditorRef.current.document.uri.toString(),
-                activeEditorRef.current.selection.active.line,
-                activeEditorRef.current.selection.active.character,
-              ]
-            : null;
+  // Note: ferrous-owl.toggleOwnership, ferrous-owl.analyze, and other ownership commands
+  // are registered by the LSP client from server capabilities.
+  // The middleware in clientOptions handles injecting the current position.
 
-      if (args) {
-        await client?.sendRequest("workspace/executeCommand", {
-          command: "rustowl.toggleOwnership",
-          arguments: args,
-        });
-      }
-    },
-  );
-
-  registerCommand("rustowl.analyze", async () => {
-    await client?.sendRequest("rustowl/analyze", {});
-    void vscode.window.showInformationMessage("RustOwl: Re-analyzing workspace...");
-  });
-
-  registerCommand("rustowl.restart", async () => {
+  registerCommand("ferrous-owl.restart", async () => {
     try {
-      await restartClient(clientOptions);
-      void vscode.window.showInformationMessage("RustOwl restarted successfully!");
+      await restartClient(clientOptions, context.extensionPath, context.extensionMode);
+      void vscode.window.showInformationMessage("FerrousOwl restarted successfully!");
     } catch (e) {
-      void vscode.window.showErrorMessage(`Failed to restart RustOwl: ${String(e)}`);
+      void vscode.window.showErrorMessage(`Failed to restart FerrousOwl: ${String(e)}`);
     }
   });
 
-  registerCommand("rustowl.update", async () => {
+  registerCommand("ferrous-owl.update", async () => {
     const choice = await vscode.window.showWarningMessage(
-      "This will stop the current RustOwl server and rebuild. Continue?",
+      "This will stop the current FerrousOwl server and rebuild. Continue?",
       "Yes",
       "No"
     );
@@ -436,9 +488,9 @@ const registerCommands = (
 
     try {
       await updateAndRestartClient(clientOptions);
-      void vscode.window.showInformationMessage("RustOwl updated and restarted successfully!");
+      void vscode.window.showInformationMessage("FerrousOwl updated and restarted successfully!");
     } catch (e) {
-      void vscode.window.showErrorMessage(`Failed to update RustOwl: ${String(e)}`);
+      void vscode.window.showErrorMessage(`Failed to update FerrousOwl: ${String(e)}`);
     }
   });
 };
@@ -475,7 +527,7 @@ const registerEventHandlers = (
 
     vscode.workspace.onDidSaveTextDocument((doc) => {
       if (doc.languageId === "rust") {
-        void client?.sendRequest("rustowl/analyze", {});
+        void client?.sendRequest("ferrous-owl/analyze", {});
       }
     }),
 
@@ -490,20 +542,8 @@ const registerEventHandlers = (
       }
     }),
 
-    vscode.languages.registerHoverProvider("rust", {
-      provideHover(document, position) {
-        if (getDisplayMode() === "hover") {
-          const editor = vscode.window.activeTextEditor;
-          if (editor?.document === document) {
-            triggerDecoration(editor, position);
-          }
-        }
-        return null;
-      },
-    }),
-
     vscode.workspace.onDidChangeConfiguration((ev) => {
-      if (ev.affectsConfiguration("rustowl.displayMode")) {
+      if (ev.affectsConfiguration("ferrous-owl.displayMode")) {
         const mode = getDisplayMode();
         statusBarManager.updateFromDisplayMode(mode);
         if (mode === "disabled") {
@@ -515,11 +555,33 @@ const registerEventHandlers = (
 };
 
 export function activate(context: vscode.ExtensionContext): void {
+  const activeEditorRef = { current: vscode.window.activeTextEditor };
+  
   const clientOptions: LanguageClientOptions = {
     documentSelector: [{ scheme: "file", language: "rust" }],
+    middleware: {
+      // Intercept executeCommand to inject current position for ownership commands
+      executeCommand: async (command: string, args: unknown[], next) => {
+        if (
+          (command === "ferrous-owl.toggleOwnership" ||
+           command === "ferrous-owl.enableOwnership" ||
+           command === "ferrous-owl.disableOwnership") &&
+          args.length === 0 &&
+          activeEditorRef.current
+        ) {
+          const editor = activeEditorRef.current;
+          const newArgs = [
+            editor.document.uri.toString(),
+            editor.selection.active.line,
+            editor.selection.active.character,
+          ];
+          return next(command, newArgs) as Promise<unknown>;
+        }
+        return next(command, args) as Promise<unknown>;
+      },
+    },
   };
 
-  const activeEditorRef = { current: vscode.window.activeTextEditor };
   const decorationManager = new DecorationManager();
   const statusBarManager = new StatusBarManager();
 
@@ -527,7 +589,7 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push({ dispose: () => statusBarManager.dispose() });
 
   void initializeClient(context, clientOptions, statusBarManager).catch((e: unknown) => {
-    void vscode.window.showErrorMessage(`Failed to start RustOwl\n${String(e)}`);
+    void vscode.window.showErrorMessage(`Failed to start FerrousOwl\n${String(e)}`);
   });
 
   registerCommands(context, activeEditorRef, decorationManager, statusBarManager, clientOptions);

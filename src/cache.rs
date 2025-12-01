@@ -5,16 +5,12 @@ use std::{
 
 use tokio::process::Command;
 
-pub fn is_cache() -> bool {
-    !env::var("RUSTOWL_CACHE")
-        .map(|v| v == "false" || v == "0")
-        .unwrap_or(false)
-}
+const CACHE_DIR_ENV: &str = "FERROUS_OWL_CACHE_DIR";
 
 pub fn set_cache_path(cmd: &mut Command, target_dir: impl AsRef<Path>) {
-    cmd.env("RUSTOWL_CACHE_DIR", target_dir.as_ref().join("cache"));
+    cmd.env(CACHE_DIR_ENV, target_dir.as_ref().join("cache"));
 }
 
 pub fn get_cache_path() -> Option<PathBuf> {
-    env::var("RUSTOWL_CACHE_DIR").map(PathBuf::from).ok()
+    env::var(CACHE_DIR_ENV).map(PathBuf::from).ok()
 }

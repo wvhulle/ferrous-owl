@@ -3,28 +3,21 @@
 use std::{env, process::exit};
 
 use clap::Parser;
-use rustowl::{cli::Cli, compiler::run_compiler_with_args};
+use ferrous_owl::{cli::Cli, compiler::run_as_rustc_wrapper};
 
 fn initialize_logging() {
-    simple_logger::SimpleLogger::new()
-        .with_colors(true)
-        .init()
-        .unwrap();
-
-    let level = env::var("RUST_LOG")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(log::LevelFilter::Info);
-    log::set_max_level(level);
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .format_timestamp(None)
+        .target(env_logger::Target::Stderr)
+        .init();
 }
 
-/// Check if invoked as a compiler by cargo (via `RUSTC_WORKSPACE_WRAPPER`).
+/// Check if invoked as a compiler by cargo.
 ///
-/// Cargo passes the executable path as both argv[0] and argv[1] when using
-/// workspace wrappers.
-fn is_invoked_by_cargo_as_compiler() -> bool {
-    let args: Vec<String> = env::args().collect();
-    args.first() == args.get(1)
+/// When `setup_cargo_command` spawns cargo with this binary as the compiler,
+/// it sets `FERROUS_OWL_AS_RUSTC=1`.
+fn is_invoked_as_compiler() -> bool {
+    env::var("FERROUS_OWL_AS_RUSTC").is_ok()
 }
 
 #[tokio::main]
@@ -35,10 +28,9 @@ async fn main() {
         .build_global()
         .unwrap();
 
-    if is_invoked_by_cargo_as_compiler() {
+    if is_invoked_as_compiler() {
         initialize_logging();
-        let args: Vec<String> = env::args().collect();
-        exit(run_compiler_with_args(&args));
+        exit(run_as_rustc_wrapper());
     }
 
     initialize_logging();

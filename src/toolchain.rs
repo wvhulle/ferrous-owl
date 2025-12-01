@@ -11,11 +11,17 @@ use tokio::process::Command as TokioCommand;
 /// Host target triple (set at compile time in build.rs)
 pub const HOST_TUPLE: &str = env!("HOST_TUPLE");
 
+/// Sysroot path captured at compile time
+const COMPILE_TIME_SYSROOT: &str = env!("COMPILE_TIME_SYSROOT");
+
+/// Environment variable for cache directory path
+pub const CACHE_DIR_ENV: &str = "FERROUS_OWL_CACHE_DIR";
+
 /// Returns the Rust sysroot path for the compiler.
 ///
 /// Resolution order:
 /// 1. `RUSTOWL_SYSROOT` environment variable
-/// 2. `rustc --print sysroot` output
+/// 2. Compile-time sysroot (embedded in binary)
 pub fn get_sysroot() -> PathBuf {
     if let Ok(sysroot) = env::var("RUSTOWL_SYSROOT") {
         let path = PathBuf::from(sysroot);
@@ -25,13 +31,23 @@ pub fn get_sysroot() -> PathBuf {
         }
     }
 
+    let path = PathBuf::from(COMPILE_TIME_SYSROOT);
+    if path.is_dir() {
+        log::info!("Using compile-time sysroot: {}", path.display());
+        return path;
+    }
+
+    // Fallback to runtime detection
     if let Ok(output) = Command::new("rustc").arg("--print").arg("sysroot").output()
         && output.status.success()
     {
         let sysroot = String::from_utf8_lossy(&output.stdout).trim().to_string();
         let path = PathBuf::from(&sysroot);
         if path.is_dir() {
-            log::info!("Using sysroot from rustc: {}", path.display());
+            log::warn!(
+                "Using sysroot from rustc (compile-time sysroot not found): {}",
+                path.display()
+            );
             return path;
         }
     }
@@ -49,16 +65,17 @@ fn current_exe_path() -> PathBuf {
 
 /// Creates a cargo command configured for `RustOwl` analysis.
 ///
-/// Sets up environment variables so cargo uses the current rustowl binary
+/// Sets up environment variables so cargo uses the current binary
 /// as the compiler wrapper.
 pub fn setup_cargo_command() -> TokioCommand {
     let mut command = TokioCommand::new("cargo");
-    let rustowl = current_exe_path();
+    let exe_path = current_exe_path();
     let sysroot = get_sysroot();
 
     command
-        .env("RUSTC", &rustowl)
-        .env("RUSTC_WORKSPACE_WRAPPER", &rustowl)
+        .env("FERROUS_OWL_AS_RUSTC", "1")
+        .env("RUSTC", &exe_path)
+        .env("RUSTC_WORKSPACE_WRAPPER", &exe_path)
         .env("RUSTC_BOOTSTRAP", "1")
         .env(
             "CARGO_ENCODED_RUSTFLAGS",

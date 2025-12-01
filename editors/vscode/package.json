@@ -1,16 +1,16 @@
 {
-  "name": "rustowl",
-  "displayName": "RustOwl VSCode",
+  "name": "ferrous-owl",
+  "displayName": "FerrousOwl VSCode",
   "description": "Visualize ownership and lifetimes in Rust",
-  "version": "1.0.0-rc.1",
+  "version": "0.0.1",
   "author": "Willem Vanhulle <willemvanhulle@protonmail.com>",
   "publisher": "wvhulle",
   "engines": {
-    "vscode": "^1.101.0"
+    "vscode": "^1.104.0"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/wvhulle/rustowl.git"
+    "url": "https://github.com/wvhulle/ferrous-owl.git"
   },
   "license": "MPL-2.0",
   "keywords": [
@@ -25,47 +25,42 @@
   "activationEvents": [
     "onLanguage:rust"
   ],
-  "icon": "rustowl-icon.png",
   "contributes": {
     "commands": [
       {
-        "command": "rustowl.hover",
-        "title": "RustOwl: Show underline at cursor"
+        "command": "ferrous-owl.toggle",
+        "title": "FerrousOwl: Toggle enabled/disabled"
       },
       {
-        "command": "rustowl.toggle",
-        "title": "RustOwl: Toggle enabled/disabled"
+        "command": "ferrous-owl.cycleDisplayMode",
+        "title": "FerrousOwl: Cycle display mode"
       },
       {
-        "command": "rustowl.cycleDisplayMode",
-        "title": "RustOwl: Cycle display mode"
+        "command": "ferrous-owl.toggleOwnership",
+        "title": "FerrousOwl: Toggle ownership diagnostics"
       },
       {
-        "command": "rustowl.toggleOwnership",
-        "title": "RustOwl: Toggle ownership diagnostics"
+        "command": "ferrous-owl.analyze",
+        "title": "FerrousOwl: Re-analyze workspace"
       },
       {
-        "command": "rustowl.analyze",
-        "title": "RustOwl: Re-analyze workspace"
+        "command": "ferrous-owl.update",
+        "title": "FerrousOwl: Update server"
       },
       {
-        "command": "rustowl.update",
-        "title": "RustOwl: Update server"
-      },
-      {
-        "command": "rustowl.restart",
-        "title": "RustOwl: Restart server"
+        "command": "ferrous-owl.restart",
+        "title": "FerrousOwl: Restart server"
       }
     ],
     "configuration": {
-      "title": "rustowl",
+      "title": "ferrous-owl",
       "properties": {
-        "rustowl.serverPath": {
+        "ferrous-owl.serverPath": {
           "type": "string",
           "default": "",
-          "description": "Path to the rustowl executable. If empty, will download and use bundled version."
+          "description": "Path to the ferrous-owl executable. If empty, will download and use bundled version."
         },
-        "rustowl.underlineThickness": {
+        "ferrous-owl.underlineThickness": {
           "type": "string",
           "default": "2",
           "enum": [
@@ -76,53 +71,51 @@
           ],
           "description": "The stroke thickness of the underline line"
         },
-        "rustowl.lifetimeColor": {
+        "ferrous-owl.lifetimeColor": {
           "type": "string",
           "default": "hsla(125, 80%, 60%, 0.6)",
           "description": "The color of the lifetime"
         },
-        "rustowl.moveCallColor": {
+        "ferrous-owl.moveCallColor": {
           "type": "string",
           "default": "hsla(35, 80%, 60%, 0.6)",
           "description": "The color of the move/call"
         },
-        "rustowl.immutableBorrowColor": {
+        "ferrous-owl.immutableBorrowColor": {
           "type": "string",
           "default": "hsla(230, 80%, 60%, 0.6)",
           "description": "The color of the immutable borrow"
         },
-        "rustowl.mutableBorrowColor": {
+        "ferrous-owl.mutableBorrowColor": {
           "type": "string",
           "default": "hsla(300, 80%, 60%, 0.6)",
           "description": "The color of the mutable borrow"
         },
-        "rustowl.outliveColor": {
+        "ferrous-owl.outliveColor": {
           "type": "string",
           "default": "hsla(0, 80%, 60%, 0.6)",
           "description": "The color of the outlive"
         },
-        "rustowl.displayDelay": {
+        "ferrous-owl.displayDelay": {
           "type": "number",
           "default": 500,
           "description": "Delay in displaying underlines (ms)"
         },
-        "rustowl.highlightBackground": {
+        "ferrous-owl.highlightBackground": {
           "type": "boolean",
           "default": false,
           "description": "Highlight text background instead of underline"
         },
-        "rustowl.displayMode": {
+        "ferrous-owl.displayMode": {
           "type": "string",
           "default": "selected",
           "enum": [
             "selected",
-            "hover",
             "manual",
             "disabled"
           ],
           "enumDescriptions": [
             "Show ownership for the variable at the cursor selection (default)",
-            "Show ownership when hovering over a variable",
             "Only show ownership when manually triggered via command or code action",
             "Disable automatic ownership display"
           ],

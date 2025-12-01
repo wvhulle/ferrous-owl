@@ -1,7 +1,7 @@
-[language-server.rustowl]
+[language-server.ferrous-owl]
 args = ["run"]
 command = "cargo"
 
 [[language]]
-language-servers = ["rust-analyzer", "rustowl"]
+language-servers = ["rust-analyzer", "ferrous-owl"]
 name = "rust"

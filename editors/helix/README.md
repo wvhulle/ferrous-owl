@@ -1,11 +1,13 @@
-# RustOwl for Helix
+# FerrousOwl for Helix
 
-This directory contains the Helix editor configuration for RustOwl LSP.
+This directory contains the Helix editor configuration for FerrousOwl LSP.
+
+Helix does not support marking arbitrary code with colors, so the colors displayed might be reduced (compared to the VS Code extension).
 
 ## Prerequisites
 
-1. Install the `rustowl` binary (see [installation instructions](../../installation/README.md))
-2. Ensure `rustowl` is in your `$PATH`
+1. Install the `ferrous-owl` Rust binary (see the root README)
+2. Ensure `ferrous-owl` is in your `$PATH`
 
 ## Installation
 
@@ -26,8 +28,8 @@ cp . ~/.config/helix
 1. Open a Rust file in Helix and wait a bit
 2. Simply press `<space>a` (code actions) while your cursor is on a variable, then select:
 
-- **"RustOwl: Show ownership"** - Display ownership/lifetime diagnostics for the variable under cursor
-- **"RustOwl: Hide ownership"** - Clear the diagnostics
+- **"FerrousOwl: Show ownership"** - Display ownership/lifetime diagnostics for the variable under cursor
+- **"FerrousOwl: Hide ownership"** - Clear the diagnostics
 
 That's it! The ownership information will appear as inline diagnostics.
 
@@ -38,9 +40,9 @@ Ownership diagnostics take some time to be computed. In that case you will the t
 If you still have problems, check Helix logs:
 
 ```bash
-grep -i rustowl ~/.cache/helix/helix.log
+grep -i ferrous-owl ~/.cache/helix/helix.log
 ```
 
 ## Limitations
 
-Helix does not support custom LSP methods like `rustowl/cursor` that enable automatic hover-triggered decorations. The ownership visualization in Helix requires manual command invocation. For automatic hover-based visualization, consider using VS Code or Neovim with the dedicated plugins.
+Helix does not support custom LSP methods like `ferrous-owl/cursor` that enable automatic hover-triggered decorations. The ownership visualization in Helix requires manual command invocation. For automatic hover-based visualization, consider using VS Code or Neovim with the dedicated plugins.

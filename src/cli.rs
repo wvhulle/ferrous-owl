@@ -94,7 +94,7 @@ impl Cli {
             command.execute().await;
         } else if self.version {
             if self.quiet == 0 {
-                print!("RustOwl ");
+                print!("{} ", env!("CARGO_PKG_NAME"));
             }
             println!("v{}", clap::crate_version!());
         } else {
@@ -104,15 +104,12 @@ impl Cli {
 }
 
 async fn start_lsp_server() {
-    eprintln!("RustOwl v{}", env!("CARGO_PKG_VERSION"));
-    eprintln!("This is an LSP server. You can use --help flag to show help.");
-
     let stdin = io::stdin();
     let stdout = io::stdout();
 
     let (service, socket) = LspService::build(Backend::new)
-        .custom_method("rustowl/cursor", Backend::cursor)
-        .custom_method("rustowl/analyze", Backend::analyze)
+        .custom_method("ferrous-owl/cursor", Backend::cursor)
+        .custom_method("ferrous-owl/analyze", Backend::analyze)
         .finish();
 
     Server::new(stdin, stdout, socket).serve(service).await;

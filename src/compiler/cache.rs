@@ -5,7 +5,9 @@
 
 use std::{
     collections::HashMap,
+    env,
     io::Write,
+    path::PathBuf,
     sync::{LazyLock, Mutex},
 };
 
@@ -16,6 +18,10 @@ use rustc_stable_hash::{FromStableHash, SipHasher128Hash};
 use serde::{Deserialize, Serialize};
 
 use crate::models::Function;
+
+fn get_cache_path() -> Option<PathBuf> {
+    env::var(crate::toolchain::CACHE_DIR_ENV).map(PathBuf::from).ok()
+}
 
 pub static CACHE: LazyLock<Mutex<Option<CacheData>>> = LazyLock::new(|| Mutex::new(None));
 
@@ -98,7 +104,7 @@ impl Default for CacheData {
 /// If cache is not enabled, then return None.
 /// If file is not exists, it returns empty [`CacheData`].
 pub fn get_cache(krate: &str) -> Option<CacheData> {
-    if let Some(cache_path) = crate::cache::get_cache_path() {
+    if let Some(cache_path) = get_cache_path() {
         let cache_path = cache_path.join(format!("{krate}.json"));
         let s = match std::fs::read_to_string(&cache_path) {
             Ok(v) => v,
@@ -116,7 +122,7 @@ pub fn get_cache(krate: &str) -> Option<CacheData> {
 }
 
 pub fn write_cache(krate: &str, cache: &CacheData) {
-    if let Some(cache_path) = crate::cache::get_cache_path() {
+    if let Some(cache_path) = get_cache_path() {
         if let Err(e) = std::fs::create_dir_all(&cache_path) {
             log::warn!("failed to create cache dir: {e}");
             return;

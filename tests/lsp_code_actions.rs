@@ -1,9 +1,10 @@
 //! Integration tests for LSP code actions.
 //!
-//! Tests the "Show ownership" code action functionality by spawning the rustowl
+//! Tests the "Show ownership" code action functionality by spawning the ferrous-owl
 //! binary and communicating via the LSP protocol over stdio.
 
 use std::{
+    env::current_exe,
     io::{BufRead, BufReader, Read, Write},
     path::PathBuf,
     process::{Child, ChildStdin, ChildStdout, Command, Stdio, id as process_id},
@@ -13,7 +14,7 @@ use std::{
 
 use serde_json::{Value, json};
 
-const TOGGLE_OWNERSHIP_CMD: &str = "rustowl.toggleOwnership";
+const TOGGLE_OWNERSHIP_CMD: &str = "ferrous-owl.toggleOwnership";
 const ANALYSIS_TIMEOUT: Duration = Duration::from_secs(120);
 const POLL_INTERVAL: Duration = Duration::from_millis(500);
 
@@ -26,13 +27,22 @@ struct LspClient {
 
 impl LspClient {
     fn spawn() -> Self {
-        let binary = env!("CARGO_BIN_EXE_rustowl");
-        let mut child = Command::new(binary)
+        let binary = current_exe()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join(env!("CARGO_PKG_NAME"));
+
+        assert!(binary.exists(), "Binary not found at {}", binary.display());
+
+        let mut child = Command::new(&binary)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::inherit())
             .spawn()
-            .expect("Failed to spawn rustowl LSP server");
+            .unwrap_or_else(|e| panic!("Failed to spawn {}: {e}", binary.display()));
 
         let stdin = child.stdin.take().expect("Failed to get stdin");
         let stdout = child.stdout.take().expect("Failed to get stdout");
@@ -221,7 +231,7 @@ impl LspClient {
         }
     }
 
-    fn get_rustowl_action_title(&mut self, uri: &str, line: u32, character: u32) -> Option<String> {
+    fn get_ferrous_owl_action_title(&mut self, uri: &str, line: u32, character: u32) -> Option<String> {
         let response = self.code_action(uri, line, character);
         response
             .get("result")
@@ -230,7 +240,7 @@ impl LspClient {
                 a.iter().find(|x| {
                     x.get("title")
                         .and_then(Value::as_str)
-                        .is_some_and(|t| t.contains("RustOwl"))
+                        .is_some_and(|t| t.contains("Ferrous"))
                 })
             })
             .and_then(|a| a.get("title"))
@@ -246,7 +256,7 @@ impl LspClient {
                 "Timeout waiting for analysis to complete"
             );
 
-            if let Some(title) = self.get_rustowl_action_title(uri, line, character)
+            if let Some(title) = self.get_ferrous_owl_action_title(uri, line, character)
                 && !title.contains("analyzing")
                 && !title.contains("waiting")
             {
@@ -266,19 +276,19 @@ impl Drop for LspClient {
 }
 
 fn test_file_uri() -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("benches/perf-tests/src/lib.rs");
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("benches/dummy/src/lib.rs");
     format!("file://{}", path.display())
 }
 
 fn perf_tests_workspace_uri() -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("benches/perf-tests");
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("benches/dummy");
     format!("file://{}", path.display())
 }
 
 #[test]
 fn ownership_diagnostics_show_function_call() {
     let mut client = LspClient::spawn();
-    // Use the perf-tests directory as workspace root so the lib.rs file is analyzed
+    // Use the dummy directory as workspace root so the lib.rs file is analyzed
     client.initialize(&perf_tests_workspace_uri());
 
     let uri = test_file_uri();
@@ -303,16 +313,17 @@ fn ownership_diagnostics_show_function_call() {
         "Should receive ownership diagnostics after enabling"
     );
 
-    // Look for a `rustowl:call` diagnostic for the SharedState::new() function call
+    // Look for a `ferrous-owl:call` diagnostic for the SharedState::new() function
+    // call
     let call_diagnostic = diagnostics.iter().find(|d| {
         d.get("code")
             .and_then(Value::as_str)
-            .is_some_and(|c| c == "rustowl:call")
+            .is_some_and(|c| c == "ferrous-owl:call")
     });
 
     assert!(
         call_diagnostic.is_some(),
-        "Should have a 'rustowl:call' diagnostic for SharedState::new(). Got diagnostics: \
+        "Should have a 'ferrous-owl:call' diagnostic for SharedState::new(). Got diagnostics: \
          {diagnostics:?}"
     );
 

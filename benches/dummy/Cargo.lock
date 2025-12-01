@@ -3,5 +3,5 @@
 version = 4
 
 [[package]]
-name = "rustowl-test-fixture"
-version = "0.1.0"
+name = "dummy"
+version = "0.0.1"

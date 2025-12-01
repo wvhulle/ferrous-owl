@@ -18,7 +18,6 @@ extern crate rustc_stable_hash;
 extern crate rustc_type_ir;
 extern crate smallvec;
 
-mod cache;
 pub mod cli;
 pub mod compiler;
 mod lsp;

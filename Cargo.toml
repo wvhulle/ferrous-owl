@@ -8,9 +8,9 @@ description = "Visualize Ownership and Lifetimes in Rust"
 edition = "2024"
 keywords = ["lifetime", "lsp", "ownership", "visualization"]
 license = "MPL-2.0"
-name = "rustowl"
+name = "ferrous-owl"
 readme = "README.md"
-repository = "https://github.com/wvhulle/rustowl"
+repository = "https://github.com/wvhulle/ferrous-owl"
 version = "0.0.1"
 
 [package.metadata.rust-analyzer]
@@ -24,12 +24,12 @@ name = "comprehensive"
 [dependencies]
 cargo_metadata = "0.23"
 clap = { version = "4", features = ["cargo", "derive"] }
+env_logger = "0.11"
 log = "0.4"
 process_alive = "0.2"
 rayon = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-simple_logger = { version = "5", features = ["stderr"] }
 tokio = { version = "1", features = [
   "fs",
   "io-std",

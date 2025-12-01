@@ -46,15 +46,16 @@ impl<R> Deco<R> {
     }
 
     /// Returns a diagnostic code for this decoration type
-    pub const fn diagnostic_code(&self) -> &'static str {
+    pub fn diagnostic_code(&self) -> String {
+        let pkg = env!("CARGO_PKG_NAME");
         match self {
-            Self::Lifetime { .. } => "rustowl:lifetime",
-            Self::ImmBorrow { .. } => "rustowl:imm-borrow",
-            Self::MutBorrow { .. } => "rustowl:mut-borrow",
-            Self::Move { .. } => "rustowl:move",
-            Self::Call { .. } => "rustowl:call",
-            Self::SharedMut { .. } => "rustowl:shared-mut",
-            Self::Outlive { .. } => "rustowl:outlive",
+            Self::Lifetime { .. } => format!("{pkg}:lifetime"),
+            Self::ImmBorrow { .. } => format!("{pkg}:imm-borrow"),
+            Self::MutBorrow { .. } => format!("{pkg}:mut-borrow"),
+            Self::Move { .. } => format!("{pkg}:move"),
+            Self::Call { .. } => format!("{pkg}:call"),
+            Self::SharedMut { .. } => format!("{pkg}:shared-mut"),
+            Self::Outlive { .. } => format!("{pkg}:outlive"),
         }
     }
 }
@@ -75,11 +76,9 @@ impl Deco<lsp_types::Range> {
         lsp_types::Diagnostic {
             range,
             severity: Some(self.diagnostic_severity()),
-            code: Some(lsp_types::NumberOrString::String(
-                self.diagnostic_code().to_string(),
-            )),
+            code: Some(lsp_types::NumberOrString::String(self.diagnostic_code())),
             code_description: None,
-            source: Some("rustowl".to_string()),
+            source: Some(env!("CARGO_PKG_NAME").to_string()),
             message: self.hover_text().to_string(),
             related_information: None,
             tags: None,

@@ -1,0 +1,5 @@
+[package]
+edition = "2021"
+name = "dummy"
+publish = false
+version = "0.0.1"

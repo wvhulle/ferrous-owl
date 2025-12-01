@@ -17,10 +17,10 @@ use crate::{
 };
 
 /// Commands supported by workspace/executeCommand
-pub const CMD_TOGGLE_OWNERSHIP: &str = "rustowl.toggleOwnership";
-pub const CMD_ENABLE_OWNERSHIP: &str = "rustowl.enableOwnership";
-pub const CMD_DISABLE_OWNERSHIP: &str = "rustowl.disableOwnership";
-pub const CMD_ANALYZE: &str = "rustowl.analyze";
+pub const CMD_TOGGLE_OWNERSHIP: &str = "ferrous-owl.toggleOwnership";
+pub const CMD_ENABLE_OWNERSHIP: &str = "ferrous-owl.enableOwnership";
+pub const CMD_DISABLE_OWNERSHIP: &str = "ferrous-owl.disableOwnership";
+pub const CMD_ANALYZE: &str = "ferrous-owl.analyze";
 
 #[derive(serde::Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -35,7 +35,7 @@ struct OwnershipState {
     enabled_files: HashMap<PathBuf, (bool, Option<lsp_types::Position>)>,
 }
 
-/// `RustOwl` LSP server backend
+/// `FerrousOwl` LSP server backend
 pub struct Backend {
     client: Client,
     analyzers: Arc<RwLock<Vec<Analyzer>>>,
@@ -78,8 +78,12 @@ impl Backend {
         }
     }
 
+    #[allow(
+        clippy::missing_errors_doc,
+        reason = "LSP handler signature requirement"
+    )]
     pub async fn analyze(&self, _params: AnalyzeRequest) -> jsonrpc::Result<AnalyzeResponse> {
-        log::info!("rustowl/analyze request received");
+        log::info!("ferrous-owl/analyze request received");
         self.do_analyze().await;
         Ok(AnalyzeResponse {})
     }
@@ -206,7 +210,7 @@ impl Backend {
         let mut selected = decoration::SelectLocal::new(position);
         let mut error = progress::AnalysisStatus::Error;
         if let Some(analyzed) = &*self.analyzed.read().await {
-            log::warn!(
+            log::debug!(
                 "Analysis data available, {} files analyzed",
                 analyzed.0.len()
             );
@@ -214,7 +218,7 @@ impl Backend {
             for (filename, file) in &analyzed.0 {
                 if filepath == PathBuf::from(filename) {
                     found_file = true;
-                    log::warn!("Found file {filename}, {} items", file.items.len());
+                    log::debug!("Found file {filename}, {} items", file.items.len());
                     if !file.items.is_empty() {
                         error = progress::AnalysisStatus::Finished;
                     }
@@ -224,14 +228,14 @@ impl Backend {
                 }
             }
             if !found_file {
-                log::warn!(
+                log::debug!(
                     "File {} not found in analysis results. Available files: {:?}",
                     filepath.display(),
                     analyzed.0.keys().collect::<Vec<_>>()
                 );
             }
 
-            log::warn!("Selected local: {:?}", selected.selected());
+            log::debug!("Selected local: {:?}", selected.selected());
             let mut calc = decoration::CalcDecos::new(selected.selected().iter().copied());
             for (filename, file) in &analyzed.0 {
                 if filepath == PathBuf::from(filename) {
@@ -242,18 +246,22 @@ impl Backend {
             }
             calc.handle_overlapping();
             let decos = calc.decorations();
-            log::warn!("Calculated {} decorations", decos.len());
+            log::debug!("Calculated {} decorations", decos.len());
             if decos.is_empty() {
                 Err(error)
             } else {
                 Ok(decos)
             }
         } else {
-            log::warn!("No analysis data available yet");
+            log::debug!("No analysis data available yet");
             Err(error)
         }
     }
 
+    #[allow(
+        clippy::missing_errors_doc,
+        reason = "LSP handler signature requirement"
+    )]
     pub async fn cursor(
         &self,
         params: decoration::CursorRequest,
@@ -298,7 +306,7 @@ impl Backend {
 
     /// Publish ownership decorations as standard LSP diagnostics for a file
     async fn publish_ownership_diagnostics(&self, path: &Path, position: lsp_types::Position) {
-        log::warn!(
+        log::debug!(
             "publish_ownership_diagnostics called for {} at {position:?}",
             path.display()
         );
@@ -311,7 +319,7 @@ impl Backend {
 
             let diagnostics = match self.decos(path, pos).await {
                 Ok(decos) => {
-                    log::warn!("Got {} decorations", decos.len());
+                    log::debug!("Got {} decorations", decos.len());
                     decos
                         .into_iter()
                         .filter(decoration::Deco::should_show_as_diagnostic)
@@ -319,12 +327,12 @@ impl Backend {
                         .collect()
                 }
                 Err(e) => {
-                    log::warn!("No decorations, status: {e:?}");
+                    log::debug!("No decorations, status: {e:?}");
                     Vec::new()
                 }
             };
 
-            log::warn!("Publishing {} diagnostics", diagnostics.len());
+            log::debug!("Publishing {} diagnostics", diagnostics.len());
             let uri = lsp_types::Url::from_file_path(path).unwrap();
             self.client
                 .publish_diagnostics(uri, diagnostics, None)
@@ -342,11 +350,15 @@ impl Backend {
     }
 
     /// Handle workspace/executeCommand for ownership visualization commands
+    #[allow(
+        clippy::missing_errors_doc,
+        reason = "LSP handler signature requirement"
+    )]
     pub async fn handle_execute_command(
         &self,
         params: lsp_types::ExecuteCommandParams,
     ) -> jsonrpc::Result<Option<serde_json::Value>> {
-        log::warn!(
+        log::debug!(
             "executeCommand received: {} {:?}",
             params.command,
             params.arguments
@@ -354,11 +366,11 @@ impl Backend {
 
         match params.command.as_str() {
             CMD_TOGGLE_OWNERSHIP => {
-                log::warn!("Processing toggleOwnership command");
+                log::debug!("Processing toggleOwnership command");
                 // Arguments: [document_uri, line, character]
                 if let Some(args) = Self::parse_position_args(&params.arguments) {
                     let (path, position) = args;
-                    log::warn!(
+                    log::debug!(
                         "Parsed args: path={}, position={position:?}",
                         path.display()
                     );
@@ -373,10 +385,10 @@ impl Backend {
                     drop(state);
 
                     if enabled {
-                        log::warn!("Publishing ownership diagnostics for {}", path.display());
+                        log::debug!("Publishing ownership diagnostics for {}", path.display());
                         self.publish_ownership_diagnostics(&path, position).await;
                     } else {
-                        log::warn!("Clearing ownership diagnostics for {}", path.display());
+                        log::debug!("Clearing ownership diagnostics for {}", path.display());
                         self.clear_ownership_diagnostics(&path).await;
                     }
                     Ok(Some(serde_json::json!({ "enabled": enabled })))
@@ -619,11 +631,11 @@ impl LanguageServer for Backend {
         // Show/Hide ownership action - always show, even if not ready
         let title = match (is_analyzed, is_enabled) {
             _ if status == progress::AnalysisStatus::Analyzing => {
-                "RustOwl: Show ownership (analyzing...)"
+                "FerrousOwl: Show ownership (analyzing...)"
             }
-            (false, _) => "RustOwl: Show ownership (waiting for analysis)",
-            (true, true) => "RustOwl: Hide ownership",
-            (true, false) => "RustOwl: Show ownership",
+            (false, _) => "FerrousOwl: Show ownership (waiting for analysis)",
+            (true, true) => "FerrousOwl: Hide ownership",
+            (true, false) => "FerrousOwl: Show ownership",
         };
 
         let action = lsp_types::CodeAction {
