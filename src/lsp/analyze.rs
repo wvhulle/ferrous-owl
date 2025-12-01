@@ -6,7 +6,7 @@ use std::{
 
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
-    process, runtime,
+    process,
     sync::{Notify, mpsc},
     task,
 };
@@ -217,30 +217,24 @@ impl Analyzer {
         args.push(path.to_string_lossy().to_string());
 
         // Run compiler in a separate thread with panic handling
-        let _handle = task::spawn_blocking(move || {
-            let (ws_receiver, compiler_handle) = compiler::run_compiler_in_thread(args);
+        let _handle = tokio::spawn(async move {
+            let (mut ws_receiver, compiler_handle) = compiler::run_compiler_in_thread(args);
 
-            // Create a runtime to receive results
-            let rt = runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .unwrap();
-
-            rt.block_on(async {
-                let mut ws_receiver = ws_receiver;
-                while let Some(ws) = ws_receiver.recv().await {
-                    let event = AnalyzerEvent::Analyzed(ws);
-                    if sender.send(event).await.is_err() {
-                        break;
-                    }
+            // Receive results asynchronously
+            while let Some(ws) = ws_receiver.recv().await {
+                let event = AnalyzerEvent::Analyzed(ws);
+                if sender.send(event).await.is_err() {
+                    break;
                 }
-            });
+            }
 
-            // Wait for compiler thread to finish
-            match compiler_handle.join() {
-                Ok(Ok(_)) => log::info!("Compiler finished successfully"),
-                Ok(Err(e)) => log::warn!("Compiler error: {e}"),
-                Err(_) => log::error!("Compiler thread panicked"),
+            // Wait for compiler thread to finish (blocking, but compiler should be done)
+            let join_result = task::spawn_blocking(move || compiler_handle.join()).await;
+            match join_result {
+                Ok(Ok(Ok(_))) => log::info!("Compiler finished successfully"),
+                Ok(Ok(Err(e))) => log::warn!("Compiler error: {e}"),
+                Ok(Err(_)) => log::error!("Compiler thread panicked"),
+                Err(e) => log::error!("Join task failed: {e}"),
             }
 
             notify_c.notify_one();

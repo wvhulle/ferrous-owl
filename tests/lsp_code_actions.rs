@@ -160,7 +160,8 @@ impl LspClient {
     }
 
     /// Execute a command and collect any diagnostics notifications that arrive
-    /// before the response. Returns `(response, diagnostics_for_uri)`.
+    /// before or shortly after the response. Returns `(response,
+    /// diagnostics_for_uri)`.
     fn execute_command_with_diagnostics(
         &mut self,
         command: &str,
@@ -182,8 +183,15 @@ impl LspClient {
 
         let expected_id = self.request_id;
         let mut collected_diagnostics = Vec::new();
+        let mut response = None;
 
+        let timeout = Instant::now() + Duration::from_secs(5);
         loop {
+            assert!(
+                Instant::now() <= timeout,
+                "Timeout waiting for command response or diagnostics"
+            );
+
             let message = self.read_message();
 
             // Check for diagnostics notification
@@ -198,7 +206,18 @@ impl LspClient {
 
             // Check for response
             if message.get("id").and_then(Value::as_i64) == Some(expected_id) {
-                return (message, collected_diagnostics);
+                response = Some(message);
+            }
+
+            // Return once we have both response and non-empty diagnostics
+            if let Some(resp) = response.take() {
+                if !collected_diagnostics.is_empty() {
+                    return (resp, collected_diagnostics);
+                }
+                // Put it back if we still need to wait for diagnostics
+                response = Some(resp);
+                // Give a short grace period for diagnostics to arrive
+                thread::sleep(Duration::from_millis(100));
             }
         }
     }
