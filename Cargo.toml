@@ -1,8 +1,5 @@
 [package]
-authors = [
-  "cordx56 <cordx56@cordx.cx>",
-  "wvhulle <willemvanhulle@protonmail.com>",
-]
+authors = ["wvhulle <willemvanhulle@protonmail.com>"]
 categories = ["development-tools", "visualization"]
 description = "Visualize Ownership and Lifetimes in Rust"
 edition = "2024"
@@ -21,7 +18,7 @@ license = "MPL-2.0"
 name = "ferrous-owl"
 readme = "README.md"
 repository = "https://github.com/wvhulle/ferrous-owl"
-version = "0.0.1"
+version = "0.0.2"
 
 [package.metadata.rust-analyzer]
 rustc_private = true

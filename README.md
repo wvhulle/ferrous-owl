@@ -1,16 +1,12 @@
 # FerrousOwl
 
-FerrousOwl visualizes ownership movement and lifetimes in Rust code. When you save a Rust file, FerrousOwl analyzes it and shows ownership/lifetime info when you hover over variables or function calls (or use a code action).
-
-FerrousOwl uses colored underlines:
+FerrousOwl visualizes ownership movement and lifetimes in Rust code using colored underlines (may depend on editor / color theme):
 
 - 🟩 Green: variable's actual lifetime
 - 🟦 Blue: immutable borrow
 - 🟪 Purple: mutable borrow
 - 🟧 Orange: value moved / function call
 - 🟥 Red: lifetime error (invalid overlap or mismatch)
-
-Move the cursor over a variable or function call and wait a few seconds to visualize info. FerrousOwl uses an extended LSP protocol, so it can be integrated with other editors.
 
 ## Installation
 
@@ -38,7 +34,12 @@ Or from git:
 cargo +nightly install --git https://github.com/wvhulle/ferrous-owl --locked
 ```
 
-Make sure the `~/.cargo/bin` directory is in your path. Then, complete the [editors/](./editors/) setup.
+Make sure the `~/.cargo/bin` directory is in your path. Then, configure one of the editor extensions that are supported out of the box (see [editors/](./editors/)):
+
+- Helix
+- VS Code: [VS Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=WillemVanhulle.ferrous-owl)
+
+FerrousOwl uses an extended LSP protocol, so it can be integrated with other editors.
 
 ## Usage
 
