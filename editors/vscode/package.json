@@ -126,13 +126,15 @@
   },
   "main": "./dist/extension.js",
   "scripts": {
-    "vscode:prepublish": "pnpm run package",
+    "vscode:prepublish": "pnpm run bundle",
     "compile": "tsc --noEmit && node esbuild.js",
     "watch": "node esbuild.js --watch",
-    "package": "tsc --noEmit && eslint . && node esbuild.js --production",
+    "bundle": "tsc --noEmit && eslint . && node esbuild.js --production",
     "lint": "eslint .",
     "fmt": "prettier -w .",
-    "build": "vsce package --no-dependencies"
+    "vsix": "vsce package --no-dependencies",
+    "upload:vscode": "vsce publish --no-dependencies",
+    "upload:ovsx": "ovsx publish --no-dependencies"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

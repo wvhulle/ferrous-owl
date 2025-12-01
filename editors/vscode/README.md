@@ -19,3 +19,7 @@ This extension should activate upon opening a Rust file. The system binary `ferr
 ## Note
 
 Underlines may not display perfectly for some characters (e.g., g, parentheses).
+
+Thanks a lot to the original author Yuki Okamoto!
+
+_This fork of [RustOwl](https://github.com/cordx56/rustowl) adds support for the Helix editor and other editors that are able to read code actions from an LSP-server and simplifies the codebase considerably._
