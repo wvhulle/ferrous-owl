@@ -1,7 +1,7 @@
-//! Integration tests for LSP code actions.
+//! LSP integration tests for ferrous-owl.
 //!
-//! Tests the "Show ownership" code action functionality by spawning the
-//! ferrous-owl binary and communicating via the LSP protocol over stdio.
+//! These tests spawn the ferrous-owl LSP server binary and communicate via
+//! JSON-RPC over stdio to verify ownership visualization functionality.
 
 use std::{
     env::current_exe,
@@ -280,23 +280,22 @@ impl Drop for LspClient {
     }
 }
 
-fn test_file_uri() -> String {
+fn dummy_lib_uri() -> String {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("benches/dummy/src/lib.rs");
     format!("file://{}", path.display())
 }
 
-fn perf_tests_workspace_uri() -> String {
+fn dummy_workspace_uri() -> String {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("benches/dummy");
     format!("file://{}", path.display())
 }
 
 #[test]
-fn ownership_diagnostics_show_function_call() {
+fn toggle_ownership_shows_call_diagnostic() {
     let mut client = LspClient::spawn();
-    // Use the dummy directory as workspace root so the lib.rs file is analyzed
-    client.initialize(&perf_tests_workspace_uri());
+    client.initialize(&dummy_workspace_uri());
 
-    let uri = test_file_uri();
+    let uri = dummy_lib_uri();
 
     // Line 173 (0-indexed: 172) contains: `let state = SharedState::new();`
     // Position on `state` variable (character 12)

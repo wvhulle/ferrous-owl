@@ -263,4 +263,11 @@ impl BorrowMap {
     pub const fn local_map(&self) -> &HashMap<Local, HashSet<BorrowIndex>> {
         &self.local_map
     }
+    /// Iterate over borrows with their indices
+    pub fn iter_with_index(&self) -> impl Iterator<Item = (BorrowIndex, &(Location, BorrowData))> {
+        self.location_map
+            .iter()
+            .enumerate()
+            .map(|(idx, data)| (BorrowIndex::from(idx), data))
+    }
 }

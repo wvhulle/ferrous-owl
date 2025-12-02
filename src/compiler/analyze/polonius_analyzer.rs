@@ -101,12 +101,22 @@ pub fn get_must_live(
         }
     }
 
-    // obtain a map that borrow index -> local
-    let mut borrow_local = HashMap::new();
+    // obtain maps from borrow index to locals:
+    // - borrow_assigned_local: borrow index -> local that holds the reference
+    // - borrow_borrowed_local: borrow index -> local being borrowed
+    let mut borrow_assigned_local = HashMap::new();
+    let mut borrow_borrowed_local = HashMap::new();
     for (local, borrow_idc) in borrow_map.local_map() {
         for borrow_idx in borrow_idc {
-            borrow_local.insert(*borrow_idx, *local);
+            borrow_assigned_local.insert(*borrow_idx, *local);
         }
+    }
+    // Get the borrowed local from BorrowData
+    for (borrow_idx, (_location, borrow_data)) in borrow_map.iter_with_index() {
+        let borrowed = match borrow_data {
+            BorrowData::Shared { borrowed, .. } | BorrowData::Mutable { borrowed, .. } => borrowed,
+        };
+        borrow_borrowed_local.insert(borrow_idx, *borrowed);
     }
 
     // check all regions' subset that must be satisfied
@@ -134,17 +144,27 @@ pub fn get_must_live(
     }
     // obtain a map that local -> locations
     // a local must lives in the locations
+    // This includes BOTH the local holding the reference AND the local being
+    // borrowed
     let mut local_must_locations = HashMap::new();
     for region_borrows in datafrog.origin_contains_loan_at.values() {
         for (region, borrows) in region_borrows {
             for borrow in borrows {
-                if let Some(locs) = region_must_locations.get(region)
-                    && let Some(local) = borrow_local.get(borrow)
-                {
-                    local_must_locations
-                        .entry(*local)
-                        .or_insert_with(HashSet::new)
-                        .extend(locs.iter().copied());
+                if let Some(locs) = region_must_locations.get(region) {
+                    // Track must-live for the local that holds the reference
+                    if let Some(assigned_local) = borrow_assigned_local.get(borrow) {
+                        local_must_locations
+                            .entry(*assigned_local)
+                            .or_insert_with(HashSet::new)
+                            .extend(locs.iter().copied());
+                    }
+                    // Also track must-live for the borrowed local (the source of the borrow)
+                    if let Some(borrowed_local) = borrow_borrowed_local.get(borrow) {
+                        local_must_locations
+                            .entry(*borrowed_local)
+                            .or_insert_with(HashSet::new)
+                            .extend(locs.iter().copied());
+                    }
                 }
             }
         }
@@ -164,7 +184,7 @@ pub fn get_must_live(
                 )),
             )
         })
-        .collect::<HashMap<_, _>>()
+        .collect()
 }
 
 /// obtain map from local id to living range

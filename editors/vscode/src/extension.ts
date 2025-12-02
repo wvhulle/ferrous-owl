@@ -55,6 +55,7 @@ interface DecorationConfig {
   readonly moveCallColor: string;
   readonly immutableBorrowColor: string;
   readonly mutableBorrowColor: string;
+  readonly sharedMutColor: string;
   readonly outliveColor: string;
   readonly highlightBackground: boolean;
 }
@@ -67,6 +68,7 @@ const getDecorationConfig = (): DecorationConfig => {
     moveCallColor: config.get<string>("moveCallColor", "hsla(35, 80%, 60%, 0.6)"),
     immutableBorrowColor: config.get<string>("immutableBorrowColor", "hsla(230, 80%, 60%, 0.6)"),
     mutableBorrowColor: config.get<string>("mutableBorrowColor", "hsla(300, 80%, 60%, 0.6)"),
+    sharedMutColor: config.get<string>("sharedMutColor", "hsla(60, 80%, 50%, 0.6)"),
     outliveColor: config.get<string>("outliveColor", "hsla(0, 80%, 60%, 0.6)"),
     highlightBackground: config.get<boolean>("highlightBackground", false),
   };
@@ -91,7 +93,7 @@ const createDecorationType = (
 
 const categorizeDecoration = (
   deco: LspDecoration,
-): "lifetime" | "immut" | "mut" | "moveCall" | "outlive" => {
+): "lifetime" | "immut" | "mut" | "moveCall" | "sharedMut" | "outlive" => {
   switch (deco.type) {
     case "lifetime":
       return "lifetime";
@@ -102,7 +104,9 @@ const categorizeDecoration = (
     case "call":
     case "move":
       return "moveCall";
-    default:
+    case "shared_mut":
+      return "sharedMut";
+    case "outlive":
       return "outlive";
   }
 };
@@ -112,6 +116,7 @@ class DecorationManager {
   private moveDecorationType = vscode.window.createTextEditorDecorationType({});
   private imBorrowDecorationType = vscode.window.createTextEditorDecorationType({});
   private mBorrowDecorationType = vscode.window.createTextEditorDecorationType({});
+  private sharedMutDecorationType = vscode.window.createTextEditorDecorationType({});
   private outLiveDecorationType = vscode.window.createTextEditorDecorationType({});
   private emptyDecorationType = vscode.window.createTextEditorDecorationType({});
 
@@ -120,6 +125,7 @@ class DecorationManager {
     this.moveDecorationType.dispose();
     this.imBorrowDecorationType.dispose();
     this.mBorrowDecorationType.dispose();
+    this.sharedMutDecorationType.dispose();
     this.outLiveDecorationType.dispose();
     this.emptyDecorationType.dispose();
   }
@@ -132,6 +138,7 @@ class DecorationManager {
     this.moveDecorationType = createDecorationType(config.moveCallColor, config.underlineThickness, config.highlightBackground);
     this.imBorrowDecorationType = createDecorationType(config.immutableBorrowColor, config.underlineThickness, config.highlightBackground);
     this.mBorrowDecorationType = createDecorationType(config.mutableBorrowColor, config.underlineThickness, config.highlightBackground);
+    this.sharedMutDecorationType = createDecorationType(config.sharedMutColor, config.underlineThickness, config.highlightBackground);
     this.outLiveDecorationType = createDecorationType(config.outliveColor, config.underlineThickness, config.highlightBackground);
     this.emptyDecorationType = vscode.window.createTextEditorDecorationType({});
 
@@ -140,6 +147,7 @@ class DecorationManager {
       immut: [] as vscode.DecorationOptions[],
       mut: [] as vscode.DecorationOptions[],
       moveCall: [] as vscode.DecorationOptions[],
+      sharedMut: [] as vscode.DecorationOptions[],
       outlive: [] as vscode.DecorationOptions[],
       messages: [] as vscode.DecorationOptions[],
     };
@@ -161,6 +169,7 @@ class DecorationManager {
     editor.setDecorations(this.imBorrowDecorationType, grouped.immut);
     editor.setDecorations(this.mBorrowDecorationType, grouped.mut);
     editor.setDecorations(this.moveDecorationType, grouped.moveCall);
+    editor.setDecorations(this.sharedMutDecorationType, grouped.sharedMut);
     editor.setDecorations(this.outLiveDecorationType, grouped.outlive);
     editor.setDecorations(this.emptyDecorationType, grouped.messages);
   }
