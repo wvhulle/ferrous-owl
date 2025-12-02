@@ -1,8 +1,3 @@
-#![allow(
-    clippy::absolute_paths,
-    reason = "paths used in compiler plugin context"
-)]
-
 use std::{
     collections::HashMap,
     env,

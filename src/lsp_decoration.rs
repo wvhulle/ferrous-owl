@@ -319,10 +319,6 @@ pub struct Decorations {
     pub is_analyzed: bool,
     pub status: AnalysisStatus,
     pub path: Option<PathBuf>,
-    #[allow(
-        clippy::struct_field_names,
-        reason = "struct represents a collection of decorations"
-    )]
     pub decorations: Vec<Deco<lsp_types::Range>>,
 }
 
@@ -477,7 +473,6 @@ impl CalcDecos {
         self.decorations.sort_by_key(Self::get_deco_order);
     }
 
-    #[allow(clippy::too_many_lines, reason = "complex overlap handling logic")]
     pub fn handle_overlapping(&mut self) {
         self.sort_by_definition();
         let mut i = 1;

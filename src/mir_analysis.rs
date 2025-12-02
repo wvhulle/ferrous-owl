@@ -1,8 +1,3 @@
-#![allow(
-    clippy::absolute_paths,
-    reason = "paths used in compiler plugin context"
-)]
-
 use std::{collections::HashMap, fs::read_to_string, future::Future, pin::Pin};
 
 use rustc_borrowck::consumers::{

@@ -78,10 +78,6 @@ impl Backend {
         }
     }
 
-    #[allow(
-        clippy::missing_errors_doc,
-        reason = "LSP handler signature requirement"
-    )]
     pub async fn analyze(&self, _params: AnalyzeRequest) -> jsonrpc::Result<AnalyzeResponse> {
         log::info!("ferrous-owl/analyze request received");
         self.do_analyze().await;
@@ -258,10 +254,6 @@ impl Backend {
         }
     }
 
-    #[allow(
-        clippy::missing_errors_doc,
-        reason = "LSP handler signature requirement"
-    )]
     pub async fn cursor(
         &self,
         params: decoration::CursorRequest,
@@ -350,10 +342,6 @@ impl Backend {
     }
 
     /// Handle workspace/executeCommand for ownership visualization commands
-    #[allow(
-        clippy::missing_errors_doc,
-        reason = "LSP handler signature requirement"
-    )]
     pub async fn handle_execute_command(
         &self,
         params: lsp_types::ExecuteCommandParams,

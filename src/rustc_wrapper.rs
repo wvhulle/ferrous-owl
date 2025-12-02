@@ -208,7 +208,6 @@ fn mir_borrowck(tcx: TyCtxt<'_>, def_id: LocalDefId) -> queries::mir_borrowck::P
         let _ = mir_borrowck(tcx, def_id);
     }
 
-    #[allow(clippy::unnecessary_wraps, reason = "required by rustc query system")]
     Ok(tcx
         .arena
         .alloc(ConcreteOpaqueTypes(indexmap::IndexMap::default())))

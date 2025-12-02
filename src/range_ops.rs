@@ -88,12 +88,11 @@ pub fn exclude_ranges(mut from: Vec<Range>, excludes: &[Range]) -> Vec<Range> {
     eliminated_ranges(from)
 }
 
-#[allow(unused, reason = "trait-based visitor pattern")]
 pub trait MirVisitor {
-    fn visit_func(&mut self, func: &Function) {}
-    fn visit_decl(&mut self, decl: &MirDecl) {}
-    fn visit_stmt(&mut self, stmt: &MirStatement) {}
-    fn visit_term(&mut self, term: &MirTerminator) {}
+    fn visit_func(&mut self, _func: &Function) {}
+    fn visit_decl(&mut self, _decl: &MirDecl) {}
+    fn visit_stmt(&mut self, _stmt: &MirStatement) {}
+    fn visit_term(&mut self, _term: &MirTerminator) {}
 }
 pub fn mir_visit(func: &Function, visitor: &mut impl MirVisitor) {
     visitor.visit_func(func);
