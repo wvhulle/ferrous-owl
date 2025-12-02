@@ -1,8 +1,15 @@
 # Changelog
 
-## Forked as FerrousOwl - 2025-11-30
+## FerrousOwl v0.0.3
+
+- Add a test-runner that can check presence of diagnostics using a mock LSP client.
+- Flatten library directory structure.
+
+## Forked as FerrousOwl v0.0.1 - 2025-11-30
 
 This repo was forked by @wvhulle from  <https://github.com/cordx56/rustowl>.
+
+_This fork of [RustOwl](https://github.com/cordx56/rustowl) adds support for NixOS, Helix. Thanks a lot to the original author Yuki Okamoto!_
 
 ## Unreleased
 
