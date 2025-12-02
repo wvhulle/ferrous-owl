@@ -1,6 +1,6 @@
 use std::{fs, io::Result, path::Path, time::Duration};
 
-use owl_test::TestCase;
+use ferrous_owl::test::TestCase;
 
 use crate::lsp_client::{LspClient, ReceivedDiagnostic, file_uri};
 
@@ -34,7 +34,8 @@ pub fn run_test(
     client.wait_for_analysis(&file_uri, line, character, Duration::from_secs(30))?;
 
     // Toggle ownership to trigger diagnostics
-    let diagnostics = client.toggle_ownership_and_wait(&file_uri, line, character, Duration::from_secs(10))?;
+    let diagnostics =
+        client.toggle_ownership_and_wait(&file_uri, line, character, Duration::from_secs(10))?;
     log::info!("Got {} diagnostics, verifying...", diagnostics.len());
 
     // Verify results
@@ -64,7 +65,10 @@ fn resolve_cursor_position(test: &TestCase) -> (u32, u32) {
     if let Some(ref text) = test.cursor_text {
         for (line_idx, line_content) in test.code.lines().enumerate() {
             if let Some(col) = line_content.find(text) {
-                #[allow(clippy::cast_possible_truncation, reason = "line/column indices fit in u32")]
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    reason = "line/column indices fit in u32"
+                )]
                 return (line_idx as u32, col as u32);
             }
         }

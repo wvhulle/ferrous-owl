@@ -1,3 +1,5 @@
+#![feature(rustc_private)]
+
 use std::{
     env, fs,
     io::{self, BufRead, Error, ErrorKind, Result},
@@ -5,7 +7,7 @@ use std::{
 };
 
 use clap::Parser;
-use owl_test::TestCase;
+use ferrous_owl::test::TestCase;
 
 mod lsp_client;
 mod runner;

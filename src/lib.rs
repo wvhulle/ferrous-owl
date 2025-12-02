@@ -22,7 +22,7 @@ pub mod cli;
 pub mod compiler;
 mod lsp;
 mod models;
+pub mod test;
 mod toolchain;
 mod utils;
-
 pub use lsp::backend::Backend;

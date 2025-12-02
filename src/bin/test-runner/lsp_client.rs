@@ -7,7 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use owl_test::ExpectedDeco;
+use ferrous_owl::test::ExpectedDeco;
 use serde_json::{Value, json};
 
 /// Received diagnostic from LSP.

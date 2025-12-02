@@ -1,5 +1,3 @@
-[workspace]
-members = ["owl-test"]
 
 [package]
 authors = ["wvhulle <willemvanhulle@protonmail.com>"]
@@ -36,7 +34,6 @@ cargo_metadata = "0.23"
 clap = { version = "4", features = ["cargo", "derive"] }
 env_logger = "0.11"
 log = "0.4"
-owl-test = { path = "owl-test" }
 process_alive = "0.2"
 rayon = "1"
 serde = { version = "1", features = ["derive"] }
@@ -59,7 +56,6 @@ uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 criterion = { version = "0.7", features = ["html_reports"] }
-owl-test = { path = "owl-test" }
 
 
 [profile.release]
