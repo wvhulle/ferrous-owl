@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs::read_to_string, future::Future, pin::Pin};
+use std::{collections::HashMap, env::current_dir, fs::read_to_string, future::Future, pin::Pin};
 
 use rustc_borrowck::consumers::{
     ConsumerOptions, PoloniusInput, PoloniusOutput, get_body_with_borrowck_facts,
@@ -70,7 +70,7 @@ impl MirAnalyzer {
         let offset = source_file.start_pos.0;
         let file_name = source_map.path_mapping().to_embeddable_absolute_path(
             rustc_span::RealFileName::LocalPath(file_name.into_local_path().unwrap()),
-            &rustc_span::RealFileName::LocalPath(std::env::current_dir().unwrap()),
+            &rustc_span::RealFileName::LocalPath(current_dir().unwrap()),
         );
         let path = file_name.to_path(rustc_span::FileNameDisplayPreference::Local);
         let source = read_to_string(path).unwrap();

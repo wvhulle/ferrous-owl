@@ -39,3 +39,4 @@ pub use rustc_wrapper::run_as_rustc_wrapper;
 pub use test_framework::{
     DecoKind, ExpectedDeco, LspClient, TestCase, cleanup_workspace, run_test, setup_workspace,
 };
+pub use test_framework::runner::TestResult;

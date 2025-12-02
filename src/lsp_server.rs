@@ -280,19 +280,19 @@ impl Backend {
                     },
                 ),
             };
-            let decorations = decos.into_iter().map(|v| v.to_lsp_range(&text)).collect();
+            let items = decos.into_iter().map(|v| v.to_lsp_range(&text)).collect();
             return Ok(decoration::Decorations {
                 is_analyzed,
                 status,
                 path: Some(path),
-                decorations,
+                items,
             });
         }
         Ok(decoration::Decorations {
             is_analyzed,
             status,
             path: None,
-            decorations: Vec::new(),
+            items: Vec::new(),
         })
     }
 

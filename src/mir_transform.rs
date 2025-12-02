@@ -5,15 +5,15 @@ use rustc_borrowck::consumers::{BorrowIndex, BorrowSet, RichLocation};
 use rustc_hir::def_id::LocalDefId;
 use rustc_middle::{
     mir::{
-        BasicBlocks, Body, BorrowKind, Local, Location, Operand, Rvalue, StatementKind,
-        TerminatorKind, VarDebugInfoContents,
+        BasicBlocks, Body, BorrowKind, Local, Location, Operand, Rvalue, Statement, StatementKind,
+        Terminator, TerminatorKind, VarDebugInfoContents,
     },
     ty::{TyCtxt, TypeFoldable, TypeFolder},
 };
 use rustc_span::source_map::SourceMap;
 
 use crate::{
-    mir_analysis::range_from_span,
+    mir_analysis::{range_from_span, sort_locs},
     models::{FnLocal, MirBasicBlock, MirRval, MirStatement, MirTerminator, Range},
 };
 
@@ -61,6 +61,88 @@ pub fn collect_user_vars(
         .collect()
 }
 
+fn convert_rvalue(
+    fn_id: LocalDefId,
+    source: &str,
+    offset: u32,
+    span: rustc_span::Span,
+    rval: &Rvalue<'_>,
+) -> Option<MirRval> {
+    match rval {
+        Rvalue::Use(Operand::Move(p)) => {
+            let local = p.local;
+            range_from_span(source, span, offset).map(|range| MirRval::Move {
+                target_local: FnLocal::new(local.as_u32(), fn_id.local_def_index.as_u32()),
+                range,
+            })
+        }
+        Rvalue::Ref(_region, kind, place) => {
+            let mutable = matches!(kind, BorrowKind::Mut { .. });
+            let local = place.local;
+            range_from_span(source, span, offset).map(|range| MirRval::Borrow {
+                target_local: FnLocal::new(local.as_u32(), fn_id.local_def_index.as_u32()),
+                range,
+                mutable,
+                outlive: None,
+            })
+        }
+        _ => None,
+    }
+}
+
+fn convert_statement(
+    fn_id: LocalDefId,
+    source: &str,
+    offset: u32,
+    statement: &Statement<'_>,
+) -> Option<MirStatement> {
+    let span = statement.source_info.span;
+    match &statement.kind {
+        StatementKind::Assign(v) => {
+            let (place, rval) = &**v;
+            let target_local_index = place.local.as_u32();
+            let rv = convert_rvalue(fn_id, source, offset, span, rval);
+            range_from_span(source, span, offset).map(|range| MirStatement::Assign {
+                target_local: FnLocal::new(target_local_index, fn_id.local_def_index.as_u32()),
+                range,
+                rval: rv,
+            })
+        }
+        _ => range_from_span(source, span, offset).map(|range| MirStatement::Other { range }),
+    }
+}
+
+fn convert_terminator(
+    fn_id: LocalDefId,
+    source: &str,
+    offset: u32,
+    terminator: &Terminator<'_>,
+) -> Option<MirTerminator> {
+    match &terminator.kind {
+        TerminatorKind::Drop { place, .. } => {
+            range_from_span(source, terminator.source_info.span, offset).map(|range| {
+                MirTerminator::Drop {
+                    local: FnLocal::new(place.local.as_u32(), fn_id.local_def_index.as_u32()),
+                    range,
+                }
+            })
+        }
+        TerminatorKind::Call {
+            destination,
+            fn_span,
+            ..
+        } => range_from_span(source, *fn_span, offset).map(|fn_span| MirTerminator::Call {
+            destination_local: FnLocal::new(
+                destination.local.as_u32(),
+                fn_id.local_def_index.as_u32(),
+            ),
+            fn_span,
+        }),
+        _ => range_from_span(source, terminator.source_info.span, offset)
+            .map(|range| MirTerminator::Other { range }),
+    }
+}
+
 /// Collect and transform [`BasicBlocks`] into our data structure
 /// [`MirBasicBlock`]s.
 pub fn collect_basic_blocks(
@@ -76,108 +158,16 @@ pub fn collect_basic_blocks(
             let statements: Vec<_> = bb_data
                 .statements
                 .iter()
-                // `source_map` is not Send
                 .filter(|stmt| stmt.source_info.span.is_visible(source_map))
                 .collect();
             let statements = statements
                 .par_iter()
-                .filter_map(|statement| match &statement.kind {
-                    StatementKind::Assign(v) => {
-                        let (place, rval) = &**v;
-                        let target_local_index = place.local.as_u32();
-                        let rv = match rval {
-                            Rvalue::Use(Operand::Move(p)) => {
-                                let local = p.local;
-                                range_from_span(source, statement.source_info.span, offset).map(
-                                    |range| MirRval::Move {
-                                        target_local: FnLocal::new(
-                                            local.as_u32(),
-                                            fn_id.local_def_index.as_u32(),
-                                        ),
-                                        range,
-                                    },
-                                )
-                            }
-                            Rvalue::Ref(_region, kind, place) => {
-                                let mutable = matches!(kind, BorrowKind::Mut { .. });
-                                let local = place.local;
-                                let outlive = None;
-                                crate::mir_analysis::range_from_span(
-                                    source,
-                                    statement.source_info.span,
-                                    offset,
-                                )
-                                .map(|range| MirRval::Borrow {
-                                    target_local: FnLocal::new(
-                                        local.as_u32(),
-                                        fn_id.local_def_index.as_u32(),
-                                    ),
-                                    range,
-                                    mutable,
-                                    outlive,
-                                })
-                            }
-                            _ => None,
-                        };
-                        crate::mir_analysis::range_from_span(
-                            source,
-                            statement.source_info.span,
-                            offset,
-                        )
-                        .map(|range| MirStatement::Assign {
-                            target_local: FnLocal::new(
-                                target_local_index,
-                                fn_id.local_def_index.as_u32(),
-                            ),
-                            range,
-                            rval: rv,
-                        })
-                    }
-                    _ => crate::mir_analysis::range_from_span(
-                        source,
-                        statement.source_info.span,
-                        offset,
-                    )
-                    .map(|range| MirStatement::Other { range }),
-                })
+                .filter_map(|statement| convert_statement(fn_id, source, offset, statement))
                 .collect();
-            let terminator =
-                bb_data
-                    .terminator
-                    .as_ref()
-                    .and_then(|terminator| match &terminator.kind {
-                        TerminatorKind::Drop { place, .. } => crate::mir_analysis::range_from_span(
-                            source,
-                            terminator.source_info.span,
-                            offset,
-                        )
-                        .map(|range| MirTerminator::Drop {
-                            local: FnLocal::new(
-                                place.local.as_u32(),
-                                fn_id.local_def_index.as_u32(),
-                            ),
-                            range,
-                        }),
-                        TerminatorKind::Call {
-                            destination,
-                            fn_span,
-                            ..
-                        } => crate::mir_analysis::range_from_span(source, *fn_span, offset).map(
-                            |fn_span| MirTerminator::Call {
-                                destination_local: FnLocal::new(
-                                    destination.local.as_u32(),
-                                    fn_id.local_def_index.as_u32(),
-                                ),
-                                fn_span,
-                            },
-                        ),
-                        _ => crate::mir_analysis::range_from_span(
-                            source,
-                            terminator.source_info.span,
-                            offset,
-                        )
-                        .map(|range| MirTerminator::Other { range }),
-                    });
+            let terminator = bb_data
+                .terminator
+                .as_ref()
+                .and_then(|term| convert_terminator(fn_id, source, offset, term));
             MirBasicBlock {
                 statements,
                 terminator,
@@ -195,11 +185,11 @@ fn statement_location_to_range(
         if statement < bb.statements.len() {
             bb.statements
                 .get(statement)
-                .map(crate::models::MirStatement::range)
+                .map(MirStatement::range)
         } else {
             bb.terminator
                 .as_ref()
-                .map(crate::models::MirTerminator::range)
+                .map(MirTerminator::range)
         }
     })
 }
@@ -221,8 +211,8 @@ pub fn rich_locations_to_ranges(
             }
         }
     }
-    crate::mir_analysis::sort_locs(&mut starts);
-    crate::mir_analysis::sort_locs(&mut mids);
+    sort_locs(&mut starts);
+    sort_locs(&mut mids);
     starts
         .par_iter()
         .zip(mids.par_iter())

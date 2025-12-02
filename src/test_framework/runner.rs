@@ -21,19 +21,21 @@ pub fn run_test(
     workspace_dir: &str,
 ) -> Result<TestResult> {
     let test_file = format!("{workspace_dir}/test_source.rs");
-    fs::write(&test_file, &test.code)?;
+    let code_with_attrs = format!("#![allow(dead_code)]\n{}", test.code);
+    fs::write(&test_file, &code_with_attrs)?;
 
     let file_uri = file_uri(&test_file);
 
-    client.open_document(&file_uri, "rust", &test.code)?;
+    client.open_document(&file_uri, "rust", &code_with_attrs)?;
 
     let (line, character) = resolve_cursor_position(test);
-    log::info!("Using cursor position: line={line}, char={character}");
+    let adjusted_line = line + 1; // Account for prepended #![allow(dead_code)]
+    log::info!("Using cursor position: line={adjusted_line}, char={character}");
 
-    client.wait_for_analysis(&file_uri, line, character, Duration::from_secs(30))?;
+    client.wait_for_analysis(&file_uri, adjusted_line, character, Duration::from_secs(30))?;
 
     let diagnostics =
-        client.toggle_ownership_and_wait(&file_uri, line, character, Duration::from_secs(10))?;
+        client.toggle_ownership_and_wait(&file_uri, adjusted_line, character, Duration::from_secs(10))?;
     log::info!("Got {} diagnostics, verifying...", diagnostics.len());
 
     let result = verify_decorations(test, &diagnostics);
@@ -73,6 +75,17 @@ fn resolve_cursor_position(test: &TestCase) -> (u32, u32) {
 }
 
 fn verify_decorations(test: &TestCase, received: &[ReceivedDiagnostic]) -> (bool, String) {
+    // Adjust received lines by -1 to account for prepended #![allow(dead_code)]
+    let adjusted: Vec<_> = received
+        .iter()
+        .map(|r| ReceivedDiagnostic {
+            code: r.code.clone(),
+            line: r.line - 1,
+            message: r.message.clone(),
+        })
+        .collect();
+    let received = &adjusted;
+
     let expected = &test.expected_decos;
     let forbidden = &test.forbidden_decos;
 

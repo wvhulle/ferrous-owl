@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     env,
+    fs::{self, OpenOptions},
     io::Write,
     path::PathBuf,
     sync::{LazyLock, Mutex},
@@ -12,12 +13,10 @@ use rustc_query_system::ich::StableHashingContext;
 use rustc_stable_hash::{FromStableHash, SipHasher128Hash};
 use serde::{Deserialize, Serialize};
 
-use crate::models::Function;
+use crate::{models::Function, toolchain::CACHE_DIR_ENV};
 
 fn get_cache_path() -> Option<PathBuf> {
-    env::var(crate::toolchain::CACHE_DIR_ENV)
-        .map(PathBuf::from)
-        .ok()
+    env::var(CACHE_DIR_ENV).map(PathBuf::from).ok()
 }
 
 pub static CACHE: LazyLock<Mutex<Option<CacheData>>> = LazyLock::new(|| Mutex::new(None));
@@ -107,7 +106,7 @@ impl Default for CacheData {
 pub fn get_cache(krate: &str) -> Option<CacheData> {
     if let Some(cache_path) = get_cache_path() {
         let cache_path = cache_path.join(format!("{krate}.json"));
-        let s = match std::fs::read_to_string(&cache_path) {
+        let s = match fs::read_to_string(&cache_path) {
             Ok(v) => v,
             Err(e) => {
                 log::warn!("failed to read incremental cache file: {e}");
@@ -124,13 +123,13 @@ pub fn get_cache(krate: &str) -> Option<CacheData> {
 
 pub fn write_cache(krate: &str, cache: &CacheData) {
     if let Some(cache_path) = get_cache_path() {
-        if let Err(e) = std::fs::create_dir_all(&cache_path) {
+        if let Err(e) = fs::create_dir_all(&cache_path) {
             log::warn!("failed to create cache dir: {e}");
             return;
         }
         let cache_path = cache_path.join(format!("{krate}.json"));
         let s = serde_json::to_string(cache).unwrap();
-        let mut f = match std::fs::OpenOptions::new()
+        let mut f = match OpenOptions::new()
             .write(true)
             .create(true)
             .truncate(true)

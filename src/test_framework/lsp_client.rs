@@ -81,7 +81,7 @@ impl LspClient {
         cmd.args(args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit());
+            .stderr(Stdio::null());
 
         let mut child = cmd.spawn()?;
 
