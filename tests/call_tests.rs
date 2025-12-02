@@ -1,6 +1,6 @@
 #![feature(rustc_private)]
 
-use ferrous_owl::test::{DecoKind, ExpectedDeco, TestCase};
+use ferrous_owl::test::{DecoKind, TestCase};
 #[test]
 fn call_string_new() {
     TestCase::new(

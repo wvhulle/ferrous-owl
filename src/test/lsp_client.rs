@@ -1,3 +1,5 @@
+//! LSP JSON-RPC client for testing the ferrous-owl language server.
+
 use std::{
     collections::HashMap,
     io::{BufRead, BufReader, BufWriter, Error, ErrorKind, Read, Result, Write},
@@ -7,8 +9,9 @@ use std::{
     time::{Duration, Instant},
 };
 
-use ferrous_owl::test::ExpectedDeco;
 use serde_json::{Value, json};
+
+use super::ExpectedDeco;
 
 /// Received diagnostic from LSP.
 #[derive(Debug, Clone)]
@@ -82,8 +85,6 @@ impl LspClient {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit());
-
-        // Command inherits environment by default, no need to manually pass vars
 
         let mut child = cmd.spawn()?;
 
@@ -235,7 +236,6 @@ impl LspClient {
         log::debug!("Sending exit notification...");
         self.send_notification("exit", &json!(null))?;
         log::debug!("Killing child process...");
-        // Don't wait indefinitely - just kill the process
         let _ = self.child.kill();
         let _ = self.child.wait();
         log::debug!("Shutdown complete");
@@ -316,31 +316,26 @@ impl LspClient {
         timeout: Duration,
     ) -> Result<Vec<ReceivedDiagnostic>> {
         log::info!("Toggling ownership at line={line}, char={character}");
-        // Execute the toggle command
         let cmd_id = self.execute_command(
             "ferrous-owl.toggleOwnership",
             &[json!(uri), json!(line), json!(character)],
         )?;
         log::debug!("Execute command request id: {cmd_id}");
 
-        // Wait for response and diagnostics
         let start = Instant::now();
         let mut diagnostics = Vec::new();
         let mut got_response = false;
 
-        // Wait for response first, then collect any diagnostics that arrive
         while start.elapsed() < timeout {
             if let Some(msg) = self.receive_message(Duration::from_millis(100))? {
                 log::debug!(
                     "Received message: {:?}",
                     msg.get("method").or_else(|| msg.get("id"))
                 );
-                // Check for command response
                 if msg.get("id").and_then(Value::as_i64) == Some(cmd_id) {
                     log::info!("Got command response");
                     got_response = true;
                 }
-                // Check for diagnostics
                 if msg.get("method").and_then(Value::as_str)
                     == Some("textDocument/publishDiagnostics")
                     && let Some(params) = msg.get("params")
@@ -354,11 +349,8 @@ impl LspClient {
                     }
                 }
 
-                // Once we have the response, give a short grace period for diagnostics
                 if got_response {
-                    // Wait a bit more for any pending diagnostics
                     thread::sleep(Duration::from_millis(200));
-                    // Drain any remaining messages
                     while let Some(msg) = self.receive_message(Duration::from_millis(50))? {
                         if msg.get("method").and_then(Value::as_str)
                             == Some("textDocument/publishDiagnostics")
@@ -405,7 +397,6 @@ fn read_messages(stdout: ChildStdout, sender: &Sender<Value>) {
             continue;
         }
 
-        // Skip the empty line after Content-Length
         let mut empty = String::new();
         if reader.read_line(&mut empty).unwrap_or(0) == 0 {
             break;
@@ -433,6 +424,7 @@ fn parse_content_length(header: &str) -> usize {
 }
 
 /// Create a file URI from a path.
+#[must_use]
 pub fn file_uri(path: &str) -> String {
     format!("file://{path}")
 }

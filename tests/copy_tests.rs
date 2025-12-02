@@ -2,7 +2,7 @@
 
 //! Negative tests: verify Copy types don't generate move decorations.
 
-use ferrous_owl::test::{DecoKind, ExpectedDeco, TestCase};
+use ferrous_owl::test::TestCase;
 #[test]
 fn copy_integer() {
     TestCase::new(

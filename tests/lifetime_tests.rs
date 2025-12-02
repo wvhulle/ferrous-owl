@@ -6,7 +6,7 @@
 //! diagnostics as "too verbose". References produce `imm-borrow` or
 //! `mut-borrow` decorations instead.
 
-use ferrous_owl::test::{DecoKind, ExpectedDeco, TestCase};
+use ferrous_owl::test::TestCase;
 #[test]
 fn lifetime_basic_reference() {
     // References show as imm-borrow decorations (Lifetime is filtered)

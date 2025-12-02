@@ -7,13 +7,10 @@ use std::{
 };
 
 use clap::Parser;
-use ferrous_owl::test::TestCase;
+use ferrous_owl::test::{
+    LspClient, TestCase, cleanup_workspace, run_test, setup_workspace,
+};
 
-mod lsp_client;
-mod runner;
-
-use lsp_client::LspClient;
-use runner::{cleanup_workspace, run_test, setup_workspace};
 
 /// Test runner for ferrous-owl LSP decoration tests.
 #[derive(Parser, Debug)]

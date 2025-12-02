@@ -23,12 +23,17 @@
 //! }
 //! ```
 
+pub mod lsp_client;
+pub mod runner;
+
 use std::{
     env, fmt,
     path::PathBuf,
     process::{Command, Stdio},
 };
 
+pub use lsp_client::{LspClient, ReceivedDiagnostic, file_uri};
+pub use runner::{TestResult as RunnerTestResult, cleanup_workspace, run_test, setup_workspace};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -277,7 +282,7 @@ impl TestCase {
     ///
     /// # Panics
     /// Panics if the test fails or if the test-runner binary cannot be found.
-    pub fn run(self) {
+    pub fn run(&self) {
         let result = execute_test(self);
         assert!(
             result.passed,
@@ -297,9 +302,8 @@ fn dedent(code: &str) -> String {
     let first_non_empty = lines.iter().position(|l| !l.trim().is_empty());
     let last_non_empty = lines.iter().rposition(|l| !l.trim().is_empty());
 
-    let (start, end) = match (first_non_empty, last_non_empty) {
-        (Some(s), Some(e)) => (s, e),
-        _ => return String::new(),
+    let (Some(start), Some(end)) = (first_non_empty, last_non_empty) else {
+        return String::new();
     };
 
     let trimmed_lines = &lines[start..=end];
@@ -350,7 +354,7 @@ fn find_workspace_root() -> PathBuf {
     env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
 }
 
-fn execute_test(test: TestCase) -> TestResult {
+fn execute_test(test: &TestCase) -> TestResult {
     let workspace_root = find_workspace_root();
     let json = test.to_json();
     let name = test.name.clone();
