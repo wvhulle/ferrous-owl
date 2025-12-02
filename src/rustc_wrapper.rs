@@ -1,6 +1,3 @@
-mod analyze;
-mod cache;
-
 use std::{
     collections::HashMap,
     env, error, fmt,
@@ -10,7 +7,6 @@ use std::{
     thread,
 };
 
-use analyze::{AnalyzeResult, MirAnalyzer, MirAnalyzerInitResult};
 use rustc_hir::def_id::{LOCAL_CRATE, LocalDefId};
 use rustc_interface::interface;
 use rustc_middle::{mir::ConcreteOpaqueTypes, query::queries, ty::TyCtxt, util::Providers};
@@ -22,11 +18,11 @@ use tokio::{
     task::JoinSet,
 };
 
-use crate::models::{Crate, File, Workspace};
-
-// ============================================================================
-// Public API
-// ============================================================================
+use crate::{
+    mir_analysis::{AnalyzeResult, MirAnalyzer, MirAnalyzerInitResult},
+    mir_cache,
+    models::{Crate, File, Workspace},
+};
 
 #[derive(Debug)]
 pub enum AnalysisError {
@@ -59,7 +55,6 @@ pub fn run_as_rustc_wrapper() -> i32 {
 pub fn spawn_analysis(file: &Path, sysroot: &Path) -> AnalysisHandle {
     let (sender, receiver) = mpsc::unbounded_channel();
 
-    // Create a temp file for output (avoids /dev/null issues with rustc temp files)
     let output_file = NamedTempFile::new().expect("Failed to create temp file for compiler output");
     let output_path = output_file.path().to_string_lossy().to_string();
 
@@ -76,7 +71,6 @@ pub fn spawn_analysis(file: &Path, sysroot: &Path) -> AnalysisHandle {
         .name("ferrous-owl-compiler".to_string())
         .stack_size(128 * 1024 * 1024)
         .spawn(move || {
-            // Keep output_file alive until compilation completes
             let _output_guard = output_file;
             *RESULT_SENDER.lock().unwrap() = Some(sender);
             let result = catch_unwind(AssertUnwindSafe(|| run_compiler(&args)));
@@ -97,10 +91,6 @@ pub fn spawn_analysis(file: &Path, sysroot: &Path) -> AnalysisHandle {
         thread,
     }
 }
-
-// ============================================================================
-// Internal implementation
-// ============================================================================
 
 static ATOMIC_TRUE: AtomicBool = AtomicBool::new(true);
 static TASKS: LazyLock<Mutex<JoinSet<AnalyzeResult>>> =
@@ -175,8 +165,8 @@ impl rustc_driver::Callbacks for AnalyzerCallback {
                 log::info!("one task joined");
                 send_result(tcx, result);
             }
-            if let Some(cache) = cache::CACHE.lock().unwrap().as_ref() {
-                cache::write_cache(&tcx.crate_name(LOCAL_CRATE).to_string(), cache);
+            if let Some(cache) = mir_cache::CACHE.lock().unwrap().as_ref() {
+                mir_cache::write_cache(&tcx.crate_name(LOCAL_CRATE).to_string(), cache);
             }
         });
 
@@ -225,7 +215,7 @@ fn mir_borrowck(tcx: TyCtxt<'_>, def_id: LocalDefId) -> queries::mir_borrowck::P
 }
 
 fn send_result(tcx: TyCtxt<'_>, analyzed: AnalyzeResult) {
-    if let Some(cache) = cache::CACHE.lock().unwrap().as_mut() {
+    if let Some(cache) = mir_cache::CACHE.lock().unwrap().as_mut() {
         cache.insert_cache(
             analyzed.file_hash.clone(),
             analyzed.mir_hash.clone(),

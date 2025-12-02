@@ -19,15 +19,23 @@ extern crate rustc_type_ir;
 extern crate smallvec;
 
 mod cli;
-mod compiler;
-mod lsp;
+mod lsp_decoration;
+mod lsp_progress;
+mod lsp_server;
+mod lsp_workspace;
+mod mir_analysis;
+mod mir_cache;
+mod mir_polonius;
+mod mir_transform;
 mod models;
-mod test;
+mod range_ops;
+mod rustc_wrapper;
+mod test_framework;
+mod text_conversion;
 mod toolchain;
-mod utils;
 
 pub use cli::Cli;
-pub use compiler::run_as_rustc_wrapper;
-pub use test::{
+pub use rustc_wrapper::run_as_rustc_wrapper;
+pub use test_framework::{
     DecoKind, ExpectedDeco, LspClient, TestCase, cleanup_workspace, run_test, setup_workspace,
 };

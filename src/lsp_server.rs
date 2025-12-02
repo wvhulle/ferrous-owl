@@ -9,11 +9,11 @@ use tokio::{sync::RwLock, task::JoinSet, time};
 use tokio_util::sync::CancellationToken;
 use tower_lsp::{Client, LanguageServer, LspService, jsonrpc, lsp_types};
 
-use super::analyze::{Analyzer, AnalyzerEvent};
 use crate::{
-    lsp::{decoration, progress},
+    lsp_decoration as decoration, lsp_progress as progress,
+    lsp_workspace::{Analyzer, AnalyzerEvent},
     models::{Crate, Loc},
-    utils,
+    range_ops, text_conversion,
 };
 
 /// Commands supported by workspace/executeCommand
@@ -223,7 +223,7 @@ impl Backend {
                         error = progress::AnalysisStatus::Finished;
                     }
                     for item in &file.items {
-                        utils::mir_visit(item, &mut selected);
+                        range_ops::mir_visit(item, &mut selected);
                     }
                 }
             }
@@ -240,7 +240,7 @@ impl Backend {
             for (filename, file) in &analyzed.0 {
                 if filepath == PathBuf::from(filename) {
                     for item in &file.items {
-                        utils::mir_visit(item, &mut calc);
+                        range_ops::mir_visit(item, &mut calc);
                     }
                 }
             }
@@ -272,7 +272,7 @@ impl Backend {
             && let Ok(text) = fs::read_to_string(&path)
         {
             let position = params.position();
-            let pos = Loc(utils::line_char_to_index(
+            let pos = Loc(text_conversion::line_char_to_index(
                 &text,
                 position.line,
                 position.character,
@@ -311,7 +311,7 @@ impl Backend {
             path.display()
         );
         if let Ok(text) = fs::read_to_string(path) {
-            let pos = Loc(utils::line_char_to_index(
+            let pos = Loc(text_conversion::line_char_to_index(
                 &text,
                 position.line,
                 position.character,

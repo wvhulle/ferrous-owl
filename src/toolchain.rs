@@ -22,6 +22,7 @@ pub const CACHE_DIR_ENV: &str = "FERROUS_OWL_CACHE_DIR";
 /// Resolution order:
 /// 1. `RUSTOWL_SYSROOT` environment variable
 /// 2. Compile-time sysroot (embedded in binary)
+#[must_use]
 pub fn get_sysroot() -> PathBuf {
     if let Ok(sysroot) = env::var("RUSTOWL_SYSROOT") {
         let path = PathBuf::from(sysroot);
@@ -67,6 +68,7 @@ fn current_exe_path() -> PathBuf {
 ///
 /// Sets up environment variables so cargo uses the current binary
 /// as the compiler wrapper.
+#[must_use]
 pub fn setup_cargo_command() -> TokioCommand {
     let mut command = TokioCommand::new("cargo");
     let exe_path = current_exe_path();

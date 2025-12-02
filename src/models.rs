@@ -127,60 +127,6 @@ impl Range {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
-#[serde(rename_all = "snake_case", tag = "type")]
-pub enum MirVariable {
-    User {
-        index: u32,
-        live: Range,
-        dead: Range,
-    },
-    Other {
-        index: u32,
-        live: Range,
-        dead: Range,
-    },
-}
-
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(transparent)]
-pub struct MirVariables(HashMap<u32, MirVariable>);
-
-impl Default for MirVariables {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl MirVariables {
-    #[must_use]
-    pub fn new() -> Self {
-        Self(HashMap::new())
-    }
-    #[cfg(test)]
-    pub fn push(&mut self, var: MirVariable) {
-        match &var {
-            MirVariable::User { index, .. } | MirVariable::Other { index, .. } => {
-                if !self.0.contains_key(index) {
-                    self.0.insert(*index, var);
-                }
-            }
-        }
-    }
-}
-
-impl From<MirVariables> for Vec<MirVariable> {
-    fn from(value: MirVariables) -> Self {
-        value.0.into_values().collect()
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "snake_case", tag = "type")]
-pub enum Item {
-    Function { span: Range, mir: Function },
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct File {
     pub items: Vec<Function>,
@@ -436,43 +382,6 @@ mod tests {
         workspace.merge(other_workspace);
         assert_eq!(workspace.0.len(), 3);
         assert!(workspace.0.contains_key("crate3"));
-    }
-
-    #[test]
-    fn test_mir_variables_operations() {
-        let mut mir_vars = MirVariables::new();
-
-        let user_var = MirVariable::User {
-            index: 1,
-            live: Range::new(Loc(0), Loc(10)).unwrap(),
-            dead: Range::new(Loc(10), Loc(20)).unwrap(),
-        };
-
-        let other_var = MirVariable::Other {
-            index: 2,
-            live: Range::new(Loc(5), Loc(15)).unwrap(),
-            dead: Range::new(Loc(15), Loc(25)).unwrap(),
-        };
-
-        mir_vars.push(user_var);
-        mir_vars.push(other_var);
-
-        let vars_vec: Vec<MirVariable> = mir_vars.clone().into();
-        assert_eq!(vars_vec.len(), 2);
-
-        let has_user_var = vars_vec
-            .iter()
-            .any(|v| matches!(v, MirVariable::User { index: 1, .. }));
-        let has_other_var = vars_vec
-            .iter()
-            .any(|v| matches!(v, MirVariable::Other { index: 2, .. }));
-
-        assert!(has_user_var);
-        assert!(has_other_var);
-
-        mir_vars.push(user_var);
-        let final_vec: Vec<MirVariable> = mir_vars.into();
-        assert_eq!(final_vec.len(), 2);
     }
 
     #[test]

@@ -3,9 +3,6 @@
     reason = "paths used in compiler plugin context"
 )]
 
-mod polonius_analyzer;
-mod transform;
-
 use std::{collections::HashMap, fs::read_to_string, future::Future, pin::Pin};
 
 use rustc_borrowck::consumers::{
@@ -18,8 +15,10 @@ use rustc_middle::{
 };
 use rustc_span::Span;
 
-use super::cache;
-use crate::models::{FnLocal, Function, Loc, MirBasicBlock, MirDecl, Range};
+use crate::{
+    mir_cache, mir_polonius, mir_transform,
+    models::{FnLocal, Function, Loc, MirBasicBlock, MirDecl, Range},
+};
 
 pub type MirAnalyzeFuture = Pin<Box<dyn Future<Output = MirAnalyzer> + Send + Sync>>;
 
@@ -36,13 +35,13 @@ pub enum MirAnalyzerInitResult {
     Analyzer(MirAnalyzeFuture),
 }
 
-fn range_from_span(source: &str, span: Span, offset: u32) -> Option<Range> {
+pub fn range_from_span(source: &str, span: Span, offset: u32) -> Option<Range> {
     let from = Loc::new(source, span.lo().0, offset);
     let until = Loc::new(source, span.hi().0, offset);
     Range::new(from, until)
 }
 
-fn sort_locs(v: &mut [(BasicBlock, usize)]) {
+pub fn sort_locs(v: &mut [(BasicBlock, usize)]) {
     v.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
 }
 
@@ -63,7 +62,6 @@ pub struct MirAnalyzer {
 }
 
 impl MirAnalyzer {
-    /// initialize analyzer
     pub fn init(tcx: TyCtxt<'_>, fn_id: LocalDefId) -> MirAnalyzerInitResult {
         let mut facts =
             get_body_with_borrowck_facts(tcx, fn_id, ConsumerOptions::PoloniusInputFacts);
@@ -84,8 +82,6 @@ impl MirAnalyzer {
         let file_name = path.to_string_lossy().to_string();
         log::debug!("facts of {fn_id:?} prepared; start analyze of {fn_id:?}");
 
-        // collect local declared vars
-        // this must be done in local thread
         let local_decls = facts
             .body
             .local_decls
@@ -93,18 +89,15 @@ impl MirAnalyzer {
             .map(|(local, decl)| (local, decl.ty.to_string()))
             .collect();
 
-        // region variables should not be hashed (it results an error)
-        // so we erase region variables and set 'static as new region
-        let mir_hash = cache::Hasher::get_hash(
+        let mir_hash = mir_cache::Hasher::get_hash(
             tcx,
-            transform::erase_region_variables(tcx, facts.body.clone()),
+            mir_transform::erase_region_variables(tcx, facts.body.clone()),
         );
-        let file_hash = cache::Hasher::get_hash(tcx, &source);
-        let mut cache = cache::CACHE.lock().unwrap();
+        let file_hash = mir_cache::Hasher::get_hash(tcx, &source);
+        let mut cache = mir_cache::CACHE.lock().unwrap();
 
-        // setup cache
         if cache.is_none() {
-            *cache = cache::get_cache(&tcx.crate_name(LOCAL_CRATE).to_string());
+            *cache = mir_cache::get_cache(&tcx.crate_name(LOCAL_CRATE).to_string());
         }
         if let Some(cache) = cache.as_mut()
             && let Some(analyzed) = cache.get_cache(&file_hash, &mir_hash)
@@ -119,13 +112,9 @@ impl MirAnalyzer {
         }
         drop(cache);
 
-        // collect user defined vars
-        // this must be done in local thread
-        let user_vars = transform::collect_user_vars(&source, offset, &facts.body);
+        let user_vars = mir_transform::collect_user_vars(&source, offset, &facts.body);
 
-        // build basic blocks map
-        // this must be done in local thread
-        let basic_blocks = transform::collect_basic_blocks(
+        let basic_blocks = mir_transform::collect_basic_blocks(
             fn_id,
             &source,
             offset,
@@ -133,31 +122,25 @@ impl MirAnalyzer {
             tcx.sess.source_map(),
         );
 
-        // collect borrow data
-        // this must be done in local thread
-        let borrow_data = transform::BorrowMap::new(&facts.borrow_set);
+        let borrow_data = mir_transform::BorrowMap::new(&facts.borrow_set);
 
         let analyzer = Box::pin(async move {
             log::debug!("start re-computing borrow check with dump: true");
-            // compute accurate region, which may eliminate invalid region
             let output_datafrog =
                 PoloniusOutput::compute(&input, polonius_engine::Algorithm::DatafrogOpt, true);
             log::debug!("borrow check finished");
 
-            let accurate_live = polonius_analyzer::get_accurate_live(
-                &output_datafrog,
-                &location_table,
-                &basic_blocks,
-            );
+            let accurate_live =
+                mir_polonius::get_accurate_live(&output_datafrog, &location_table, &basic_blocks);
 
-            let must_live = polonius_analyzer::get_must_live(
+            let must_live = mir_polonius::get_must_live(
                 &output_datafrog,
                 &location_table,
                 &borrow_data,
                 &basic_blocks,
             );
 
-            let (shared_live, mutable_live) = polonius_analyzer::get_borrow_live(
+            let (shared_live, mutable_live) = mir_polonius::get_borrow_live(
                 &output_datafrog,
                 &location_table,
                 &borrow_data,
@@ -165,7 +148,7 @@ impl MirAnalyzer {
             );
 
             let drop_range =
-                polonius_analyzer::drop_range(&output_datafrog, &location_table, &basic_blocks);
+                mir_polonius::drop_range(&output_datafrog, &location_table, &basic_blocks);
 
             Self {
                 file_name,
@@ -186,8 +169,6 @@ impl MirAnalyzer {
         MirAnalyzerInitResult::Analyzer(analyzer)
     }
 
-    /// collect declared variables in MIR body
-    /// final step of analysis
     fn collect_decls(&self) -> Vec<MirDecl> {
         let user_vars = &self.user_vars;
         let lives = &self.accurate_live;
@@ -243,7 +224,6 @@ impl MirAnalyzer {
         false
     }
 
-    /// analyze MIR to get JSON-serializable, TypeScript friendly representation
     #[must_use]
     pub fn analyze(self) -> AnalyzeResult {
         let decls = self.collect_decls();

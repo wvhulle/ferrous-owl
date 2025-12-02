@@ -50,6 +50,7 @@ pub struct Hasher<'a> {
 }
 
 impl<'tcx> Hasher<'tcx> {
+    #[must_use]
     pub fn new(tcx: TyCtxt<'tcx>) -> Self {
         Self {
             hasher: StableHasher::default(),
@@ -81,9 +82,11 @@ impl<'tcx> Hasher<'tcx> {
 #[serde(transparent)]
 pub struct CacheData(HashMap<String, HashMap<String, Function>>);
 impl CacheData {
+    #[must_use]
     pub fn new() -> Self {
         Self(HashMap::new())
     }
+    #[must_use]
     pub fn get_cache(&self, file_hash: &str, mir_hash: &str) -> Option<Function> {
         self.0.get(file_hash).and_then(|v| v.get(mir_hash)).cloned()
     }
@@ -105,6 +108,7 @@ impl Default for CacheData {
 ///
 /// If cache is not enabled, then return None.
 /// If file is not exists, it returns empty [`CacheData`].
+#[must_use]
 pub fn get_cache(krate: &str) -> Option<CacheData> {
     if let Some(cache_path) = get_cache_path() {
         let cache_path = cache_path.join(format!("{krate}.json"));

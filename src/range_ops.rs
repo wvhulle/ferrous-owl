@@ -1,10 +1,12 @@
-use crate::models::{Function, Loc, MirDecl, MirStatement, MirTerminator, Range};
+use crate::models::{Function, MirDecl, MirStatement, MirTerminator, Range};
 
+#[must_use]
 pub fn is_super_range(r1: Range, r2: Range) -> bool {
     (r1.from() < r2.from() && r2.until() <= r1.until())
         || (r1.from() <= r2.from() && r2.until() < r1.until())
 }
 
+#[must_use]
 pub fn common_range(r1: Range, r2: Range) -> Option<Range> {
     if r2.from() < r1.from() {
         return common_range(r2, r1);
@@ -17,6 +19,7 @@ pub fn common_range(r1: Range, r2: Range) -> Option<Range> {
     Range::new(from, until)
 }
 
+#[must_use]
 pub fn common_ranges(ranges: &[Range]) -> Vec<Range> {
     let mut common_ranges = Vec::new();
     for i in 0..ranges.len() {
@@ -30,6 +33,7 @@ pub fn common_ranges(ranges: &[Range]) -> Vec<Range> {
 }
 
 /// merge two ranges, result is superset of two ranges
+#[must_use]
 pub fn merge_ranges(r1: Range, r2: Range) -> Option<Range> {
     if common_range(r1, r2).is_some() || r1.until() == r2.from() || r2.until() == r1.from() {
         let from = r1.from().min(r2.from());
@@ -41,6 +45,7 @@ pub fn merge_ranges(r1: Range, r2: Range) -> Option<Range> {
 }
 
 /// eliminate common ranges and flatten ranges
+#[must_use]
 pub fn eliminated_ranges(mut ranges: Vec<Range>) -> Vec<Range> {
     let mut i = 0;
     'outer: while i < ranges.len() {
@@ -60,6 +65,7 @@ pub fn eliminated_ranges(mut ranges: Vec<Range>) -> Vec<Range> {
     ranges
 }
 
+#[must_use]
 pub fn exclude_ranges(mut from: Vec<Range>, excludes: &[Range]) -> Vec<Range> {
     let mut i = 0;
     'outer: while i < from.len() {
@@ -102,46 +108,4 @@ pub fn mir_visit(func: &Function, visitor: &mut impl MirVisitor) {
             visitor.visit_term(term);
         }
     }
-}
-
-pub fn index_to_line_char(s: &str, idx: Loc) -> (u32, u32) {
-    let mut line = 0;
-    let mut col = 0;
-    // it seems that the compiler is ignoring CR
-    for (i, c) in s.replace('\r', "").chars().enumerate() {
-        #[allow(
-            clippy::cast_possible_truncation,
-            reason = "source files are typically less than 2^32 characters"
-        )]
-        if idx == Loc::from(u32::try_from(i).unwrap_or(u32::MAX)) {
-            return (line, col);
-        }
-        if c == '\n' {
-            line += 1;
-            col = 0;
-        } else if c != '\r' {
-            col += 1;
-        }
-    }
-    (0, 0)
-}
-pub fn line_char_to_index(s: &str, mut line: u32, char: u32) -> u32 {
-    let mut col = 0;
-    // it seems that the compiler is ignoring CR
-    for (i, c) in s.replace('\r', "").chars().enumerate() {
-        if line == 0 && col == char {
-            #[allow(
-                clippy::cast_possible_truncation,
-                reason = "source files are typically less than 2^32 characters"
-            )]
-            return u32::try_from(i).unwrap_or(0);
-        }
-        if c == '\n' && 0 < line {
-            line -= 1;
-            col = 0;
-        } else if c != '\r' {
-            col += 1;
-        }
-    }
-    0
 }

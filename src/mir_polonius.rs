@@ -5,12 +5,13 @@ use rustc_borrowck::consumers::{PoloniusLocationTable, PoloniusOutput};
 use rustc_index::Idx;
 use rustc_middle::mir::Local;
 
-use super::transform::{BorrowData, BorrowMap};
 use crate::{
+    mir_transform::{BorrowData, BorrowMap, rich_locations_to_ranges},
     models::{MirBasicBlock, Range},
-    utils,
+    range_ops,
 };
 
+#[must_use]
 pub fn get_accurate_live(
     datafrog: &PoloniusOutput,
     location_table: &PoloniusLocationTable,
@@ -62,7 +63,7 @@ pub fn get_borrow_live(
             .map(|(local, locations)| {
                 (
                     local,
-                    utils::eliminated_ranges(super::transform::rich_locations_to_ranges(
+                    range_ops::eliminated_ranges(rich_locations_to_ranges(
                         basic_blocks,
                         &locations,
                     )),
@@ -74,7 +75,7 @@ pub fn get_borrow_live(
             .map(|(local, locations)| {
                 (
                     local,
-                    utils::eliminated_ranges(super::transform::rich_locations_to_ranges(
+                    range_ops::eliminated_ranges(rich_locations_to_ranges(
                         basic_blocks,
                         &locations,
                     )),
@@ -175,7 +176,7 @@ pub fn get_must_live(
         .map(|(local, locations)| {
             (
                 *local,
-                utils::eliminated_ranges(super::transform::rich_locations_to_ranges(
+                range_ops::eliminated_ranges(rich_locations_to_ranges(
                     basic_blocks,
                     &locations
                         .iter()
@@ -188,6 +189,7 @@ pub fn get_must_live(
 }
 
 /// obtain map from local id to living range
+#[must_use]
 pub fn drop_range(
     datafrog: &PoloniusOutput,
     location_table: &PoloniusLocationTable,
@@ -223,10 +225,7 @@ pub fn get_range(
         .map(|(local, locations)| {
             (
                 local.into(),
-                utils::eliminated_ranges(super::transform::rich_locations_to_ranges(
-                    basic_blocks,
-                    &locations,
-                )),
+                range_ops::eliminated_ranges(rich_locations_to_ranges(basic_blocks, &locations)),
             )
         })
         .collect()

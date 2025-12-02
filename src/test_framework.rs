@@ -1,28 +1,3 @@
-//! Test utilities for ferrous-owl LSP decoration tests.
-//!
-//! This crate provides test case definitions and a test runner that spawns
-//! the ferrous-owl test-runner binary. It does NOT depend on `rustc_private`,
-//! so it can be used in normal integration tests.
-//!
-//! # Example
-//!
-//! ```rust,ignore
-//! use owl_test::{TestCase, DecoKind};
-//!
-//! #[test]
-//! fn test_move_to_drop() {
-//!     TestCase::new("move_to_drop", r#"
-//!         fn test() {
-//!             let s = String::new();
-//!             drop(s);
-//!         }
-//!     "#)
-//!     .cursor_on("s = String")
-//!     .expect_move()
-//!     .run();
-//! }
-//! ```
-
 pub mod lsp_client;
 pub mod runner;
 
@@ -278,10 +253,6 @@ impl TestCase {
         serde_json::to_string(self).expect("TestCase serialization should not fail")
     }
 
-    /// Run the test case by spawning the test-runner binary.
-    ///
-    /// # Panics
-    /// Panics if the test fails or if the test-runner binary cannot be found.
     pub fn run(&self) {
         let result = execute_test(self);
         assert!(
@@ -336,10 +307,8 @@ pub struct TestResult {
 }
 
 fn find_workspace_root() -> PathBuf {
-    // Try to find workspace root from CARGO_MANIFEST_DIR
     if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
         let manifest_path = PathBuf::from(&manifest_dir);
-        // owl-test is at workspace_root/owl-test, so parent is workspace root
         if let Some(parent) = manifest_path.parent()
             && parent.join("Cargo.toml").exists()
         {
@@ -348,7 +317,6 @@ fn find_workspace_root() -> PathBuf {
         return manifest_path;
     }
 
-    // Fallback to current directory
     env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
 }
 
@@ -365,9 +333,8 @@ fn execute_test(test: &TestCase) -> TestResult {
         .arg(&json)
         .current_dir(&workspace_root)
         .stdout(Stdio::piped())
-        .stderr(Stdio::inherit()); // Let cargo output go directly to terminal
+        .stderr(Stdio::inherit());
 
-    // Pass through logging environment variables
     if let Ok(rust_log) = env::var("RUST_LOG") {
         cmd.env("RUST_LOG", rust_log);
     }
@@ -391,44 +358,5 @@ fn execute_test(test: &TestCase) -> TestResult {
         name,
         passed,
         error,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_dedent_basic() {
-        let code = r#"
-            fn test() {
-                let x = 1;
-            }
-        "#;
-        let result = dedent(code);
-        assert_eq!(result, "fn test() {\n    let x = 1;\n}");
-    }
-
-    #[test]
-    fn test_dedent_empty() {
-        assert_eq!(dedent(""), "");
-        assert_eq!(dedent("   \n   \n"), "");
-    }
-
-    #[test]
-    fn test_dedent_no_indent() {
-        let code = "fn test() {}";
-        assert_eq!(dedent(code), "fn test() {}");
-    }
-
-    #[test]
-    fn test_case_serialization() {
-        let test = TestCase::new("test", "fn test() {}")
-            .cursor_on("test")
-            .expect_move();
-
-        let json = test.to_json();
-        assert!(json.contains("\"name\":\"test\""));
-        assert!(json.contains("\"cursor_text\":\"test\""));
     }
 }

@@ -11,7 +11,7 @@ use tokio::{
     task,
 };
 
-use crate::{compiler, models::Workspace, toolchain};
+use crate::{models::Workspace, rustc_wrapper as compiler, toolchain};
 
 fn set_cache_path(cmd: &mut Command, target_dir: impl AsRef<Path>) {
     cmd.env(toolchain::CACHE_DIR_ENV, target_dir.as_ref().join("cache"));
@@ -88,6 +88,7 @@ impl Analyzer {
             Err(())
         }
     }
+    #[must_use]
     pub fn target_path(&self) -> &Path {
         &self.path
     }

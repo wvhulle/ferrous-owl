@@ -3,9 +3,9 @@ use std::{collections::HashSet, path::PathBuf};
 use tower_lsp::lsp_types;
 
 use crate::{
-    lsp::progress,
+    lsp_progress::AnalysisStatus,
     models::{FnLocal, Loc, MirDecl, MirRval, MirStatement, MirTerminator, Range},
-    utils,
+    range_ops, text_conversion,
 };
 
 impl<R> Deco<R> {
@@ -62,6 +62,7 @@ impl<R> Deco<R> {
 
 impl Deco<lsp_types::Range> {
     /// Convert this decoration to an LSP diagnostic
+    #[must_use]
     pub fn to_diagnostic(&self) -> lsp_types::Diagnostic {
         let range = match self {
             Self::Lifetime { range, .. }
@@ -145,6 +146,7 @@ impl Deco<Range> {
         clippy::too_many_lines,
         reason = "range conversion logic requires detailed matching"
     )]
+    #[must_use]
     pub fn to_lsp_range(&self, s: &str) -> Deco<lsp_types::Range> {
         match self.clone() {
             Self::Lifetime {
@@ -153,8 +155,8 @@ impl Deco<Range> {
                 hover_text,
                 overlapped,
             } => {
-                let start = utils::index_to_line_char(s, range.from());
-                let end = utils::index_to_line_char(s, range.until());
+                let start = text_conversion::index_to_line_char(s, range.from());
+                let end = text_conversion::index_to_line_char(s, range.until());
                 let start = lsp_types::Position {
                     line: start.0,
                     character: start.1,
@@ -176,8 +178,8 @@ impl Deco<Range> {
                 hover_text,
                 overlapped,
             } => {
-                let start = utils::index_to_line_char(s, range.from());
-                let end = utils::index_to_line_char(s, range.until());
+                let start = text_conversion::index_to_line_char(s, range.from());
+                let end = text_conversion::index_to_line_char(s, range.until());
                 let start = lsp_types::Position {
                     line: start.0,
                     character: start.1,
@@ -199,8 +201,8 @@ impl Deco<Range> {
                 hover_text,
                 overlapped,
             } => {
-                let start = utils::index_to_line_char(s, range.from());
-                let end = utils::index_to_line_char(s, range.until());
+                let start = text_conversion::index_to_line_char(s, range.from());
+                let end = text_conversion::index_to_line_char(s, range.until());
                 let start = lsp_types::Position {
                     line: start.0,
                     character: start.1,
@@ -222,8 +224,8 @@ impl Deco<Range> {
                 hover_text,
                 overlapped,
             } => {
-                let start = utils::index_to_line_char(s, range.from());
-                let end = utils::index_to_line_char(s, range.until());
+                let start = text_conversion::index_to_line_char(s, range.from());
+                let end = text_conversion::index_to_line_char(s, range.until());
                 let start = lsp_types::Position {
                     line: start.0,
                     character: start.1,
@@ -245,8 +247,8 @@ impl Deco<Range> {
                 hover_text,
                 overlapped,
             } => {
-                let start = utils::index_to_line_char(s, range.from());
-                let end = utils::index_to_line_char(s, range.until());
+                let start = text_conversion::index_to_line_char(s, range.from());
+                let end = text_conversion::index_to_line_char(s, range.until());
                 let start = lsp_types::Position {
                     line: start.0,
                     character: start.1,
@@ -268,8 +270,8 @@ impl Deco<Range> {
                 hover_text,
                 overlapped,
             } => {
-                let start = utils::index_to_line_char(s, range.from());
-                let end = utils::index_to_line_char(s, range.until());
+                let start = text_conversion::index_to_line_char(s, range.from());
+                let end = text_conversion::index_to_line_char(s, range.until());
                 let start = lsp_types::Position {
                     line: start.0,
                     character: start.1,
@@ -292,8 +294,8 @@ impl Deco<Range> {
                 hover_text,
                 overlapped,
             } => {
-                let start = utils::index_to_line_char(s, range.from());
-                let end = utils::index_to_line_char(s, range.until());
+                let start = text_conversion::index_to_line_char(s, range.from());
+                let end = text_conversion::index_to_line_char(s, range.until());
                 let start = lsp_types::Position {
                     line: start.0,
                     character: start.1,
@@ -315,7 +317,7 @@ impl Deco<Range> {
 #[derive(serde::Serialize, Clone, Debug)]
 pub struct Decorations {
     pub is_analyzed: bool,
-    pub status: progress::AnalysisStatus,
+    pub status: AnalysisStatus,
     pub path: Option<PathBuf>,
     #[allow(
         clippy::struct_field_names,
@@ -331,9 +333,11 @@ pub struct CursorRequest {
     pub document: lsp_types::TextDocumentIdentifier,
 }
 impl CursorRequest {
+    #[must_use]
     pub fn path(&self) -> Option<PathBuf> {
         self.document.uri.to_file_path().ok()
     }
+    #[must_use]
     pub const fn position(&self) -> lsp_types::Position {
         self.position
     }
@@ -353,6 +357,7 @@ pub struct SelectLocal {
     selected: Option<(SelectReason, FnLocal, Range)>,
 }
 impl SelectLocal {
+    #[must_use]
     pub const fn new(pos: Loc) -> Self {
         Self {
             pos,
@@ -393,11 +398,12 @@ impl SelectLocal {
         }
     }
 
+    #[must_use]
     pub fn selected(&self) -> Option<FnLocal> {
         self.selected.map(|v| v.1)
     }
 }
-impl utils::MirVisitor for SelectLocal {
+impl range_ops::MirVisitor for SelectLocal {
     fn visit_decl(&mut self, decl: &MirDecl) {
         let (local, ty) = match decl {
             MirDecl::User { local, ty, .. } | MirDecl::Other { local, ty, .. } => (local, ty),
@@ -522,9 +528,9 @@ impl CalcDecos {
                     continue;
                 }
 
-                if let Some(common) = utils::common_range(current_range, prev_range) {
+                if let Some(common) = range_ops::common_range(current_range, prev_range) {
                     let mut new_decos = Vec::new();
-                    let non_overlapping = utils::exclude_ranges(vec![prev_range], &[common]);
+                    let non_overlapping = range_ops::exclude_ranges(vec![prev_range], &[common]);
 
                     for range in non_overlapping {
                         let new_deco = match prev {
@@ -625,11 +631,12 @@ impl CalcDecos {
         }
     }
 
+    #[must_use]
     pub fn decorations(self) -> Vec<Deco> {
         self.decorations
     }
 }
-impl utils::MirVisitor for CalcDecos {
+impl range_ops::MirVisitor for CalcDecos {
     fn visit_decl(&mut self, decl: &MirDecl) {
         let (local, lives, shared_borrow, mutable_borrow, drop_range, must_live_at, name, drop) =
             match decl {
@@ -681,9 +688,9 @@ impl utils::MirVisitor for CalcDecos {
             );
             // merge Drop object lives
             let drop_copy_live = if *drop {
-                utils::eliminated_ranges(drop_range.clone())
+                range_ops::eliminated_ranges(drop_range.clone())
             } else {
-                utils::eliminated_ranges(lives.clone())
+                range_ops::eliminated_ranges(lives.clone())
             };
             for range in &drop_copy_live {
                 self.decorations.push(Deco::Lifetime {
@@ -695,7 +702,7 @@ impl utils::MirVisitor for CalcDecos {
             }
             let mut borrow_ranges = shared_borrow.clone();
             borrow_ranges.extend_from_slice(mutable_borrow);
-            let shared_mut = utils::common_ranges(&borrow_ranges);
+            let shared_mut = range_ops::common_ranges(&borrow_ranges);
             for range in shared_mut {
                 self.decorations.push(Deco::SharedMut {
                     local,
@@ -704,7 +711,7 @@ impl utils::MirVisitor for CalcDecos {
                     overlapped: false,
                 });
             }
-            let outlive = utils::exclude_ranges(must_live_at.clone(), &drop_copy_live);
+            let outlive = range_ops::exclude_ranges(must_live_at.clone(), &drop_copy_live);
             for range in outlive {
                 self.decorations.push(Deco::Outlive {
                     local,
@@ -771,7 +778,7 @@ impl utils::MirVisitor for CalcDecos {
             let mut i = 0;
             for deco in &self.decorations {
                 if let Deco::Call { range, .. } = deco
-                    && utils::is_super_range(*fn_span, *range)
+                    && range_ops::is_super_range(*fn_span, *range)
                 {
                     return;
                 }
@@ -782,7 +789,7 @@ impl utils::MirVisitor for CalcDecos {
                     _ => None,
                 };
                 if let Some(range) = range
-                    && utils::is_super_range(*range, *fn_span)
+                    && range_ops::is_super_range(*range, *fn_span)
                 {
                     self.decorations.remove(i);
                     continue;
