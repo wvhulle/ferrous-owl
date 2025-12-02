@@ -31,8 +31,8 @@ pub enum MirAnalyzerInitResult {
 }
 
 pub fn range_from_span(source: &str, span: Span, offset: u32) -> Option<Range> {
-    let from = Loc::new(source, span.lo().0, offset);
-    let until = Loc::new(source, span.hi().0, offset);
+    let from = Loc::from_byte_pos(source, span.lo().0, offset);
+    let until = Loc::from_byte_pos(source, span.hi().0, offset);
     Range::new(from, until)
 }
 

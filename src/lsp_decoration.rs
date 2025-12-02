@@ -142,10 +142,6 @@ pub enum Deco<R = Range> {
     },
 }
 impl Deco<Range> {
-    #[allow(
-        clippy::too_many_lines,
-        reason = "range conversion logic requires detailed matching"
-    )]
     #[must_use]
     pub fn to_lsp_range(&self, s: &str) -> Deco<lsp_types::Range> {
         match self.clone() {

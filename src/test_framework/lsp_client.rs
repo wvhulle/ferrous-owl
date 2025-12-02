@@ -12,12 +12,13 @@ use std::{
 use serde_json::{Value, json};
 
 use super::ExpectedDeco;
+use crate::models::Loc;
 
 /// Received diagnostic from LSP.
 #[derive(Debug, Clone)]
 pub struct ReceivedDiagnostic {
     pub code: String,
-    pub line: u32,
+    pub line: Loc,
     pub message: String,
 }
 
@@ -29,11 +30,7 @@ impl ReceivedDiagnostic {
         let start = range.get("start")?;
         let message = value.get("message").and_then(Value::as_str).unwrap_or("");
 
-        #[allow(
-            clippy::cast_possible_truncation,
-            reason = "LSP line numbers fit in u32"
-        )]
-        let line = start.get("line")?.as_u64()? as u32;
+        let line = Loc::from(start.get("line")?.as_u64()?);
 
         Some(Self {
             code: code.to_string(),
@@ -49,7 +46,7 @@ impl ReceivedDiagnostic {
         let kind_matches = self.code.ends_with(&format!(":{}", expected.kind));
 
         // Check line if specified
-        let line_matches = expected.line.is_none_or(|l| self.line == l);
+        let line_matches = expected.line.is_none_or(|l| self.line == Loc::from(l));
 
         // Check text_match if specified (look in message)
         let text_matches = expected

@@ -1,5 +1,7 @@
+use core::fmt::Display;
 use std::{
     collections::HashMap,
+    fmt,
     ops::{Add, Sub},
 };
 
@@ -21,27 +23,21 @@ impl FnLocal {
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 #[serde(transparent)]
 pub struct Loc(u32);
+
 impl Loc {
     #[must_use]
-    pub fn new(source: &str, byte_pos: u32, offset: u32) -> Self {
+    pub fn from_byte_pos(source: &str, byte_pos: u32, offset: u32) -> Self {
         let byte_pos = byte_pos.saturating_sub(offset);
         // it seems that the compiler is ignoring CR
         let source_clean = source.replace('\r', "");
 
         // Convert byte position to character position safely
         if source_clean.len() < byte_pos as usize {
-            #[allow(
-                clippy::cast_possible_truncation,
-                reason = "count is bounded by string length"
-            )]
-            return Self(source_clean.chars().count() as u32);
+            return Self::from(source_clean.chars().count());
         }
 
         // Find the character index corresponding to the byte position
-        #[allow(
-            clippy::cast_possible_truncation,
-            reason = "char index is bounded by position"
-        )]
+
         source_clean
             .char_indices()
             .position(|(byte_idx, _)| (byte_pos as usize) <= byte_idx)
@@ -53,8 +49,14 @@ impl Loc {
                     )]
                     Self(source_clean.chars().count() as u32)
                 },
-                |char_idx| Self(char_idx as u32),
+                Self::from,
             )
+    }
+}
+
+impl Display for Loc {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -75,6 +77,18 @@ impl Sub<i32> for Loc {
 impl From<u32> for Loc {
     fn from(value: u32) -> Self {
         Self(value)
+    }
+}
+
+impl From<u64> for Loc {
+    fn from(value: u64) -> Self {
+        Self(u32::try_from(value).unwrap_or(u32::MAX))
+    }
+}
+
+impl From<usize> for Loc {
+    fn from(value: usize) -> Self {
+        Self(u32::try_from(value).unwrap_or(u32::MAX))
     }
 }
 
@@ -272,7 +286,7 @@ mod tests {
 
     #[test]
     fn test_loc_arithmetic_memory_safety() {
-        let loc = Loc::new("test string with unicode 🦀", 5, 0);
+        let loc = Loc::from_byte_pos("test string with unicode 🦀", 5, 0);
         let loc2 = loc + 2;
         let loc3 = loc2 - 1;
 
