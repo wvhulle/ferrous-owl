@@ -191,6 +191,7 @@ pub struct File {
 pub struct Workspace(pub HashMap<String, Crate>);
 
 impl Workspace {
+    #[cfg(test)]
     pub fn merge(&mut self, other: Self) {
         let Self(crates) = other;
         for (name, krate) in crates {

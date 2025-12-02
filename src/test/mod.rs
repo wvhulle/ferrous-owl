@@ -32,8 +32,8 @@ use std::{
     process::{Command, Stdio},
 };
 
-pub use lsp_client::{LspClient, ReceivedDiagnostic, file_uri};
-pub use runner::{TestResult as RunnerTestResult, cleanup_workspace, run_test, setup_workspace};
+pub use lsp_client::LspClient;
+pub use runner::{cleanup_workspace, run_test, setup_workspace};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -333,8 +333,6 @@ pub struct TestResult {
     pub name: String,
     pub passed: bool,
     pub error: Option<String>,
-    pub stdout: String,
-    pub stderr: String,
 }
 
 fn find_workspace_root() -> PathBuf {
@@ -393,8 +391,6 @@ fn execute_test(test: &TestCase) -> TestResult {
         name,
         passed,
         error,
-        stdout,
-        stderr: String::new(),
     }
 }
 

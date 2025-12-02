@@ -3,7 +3,7 @@
 use std::{env, process::exit};
 
 use clap::Parser;
-use ferrous_owl::{cli::Cli, compiler::run_as_rustc_wrapper};
+use ferrous_owl::{Cli, run_as_rustc_wrapper};
 
 fn initialize_logging() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))

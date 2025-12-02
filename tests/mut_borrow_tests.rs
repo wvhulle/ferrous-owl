@@ -2,7 +2,7 @@
 
 //! Tests for mutable borrow decoration detection.
 
-use ferrous_owl::test::TestCase;
+use ferrous_owl::TestCase;
 #[test]
 fn mut_borrow_push() {
     TestCase::new(

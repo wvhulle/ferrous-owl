@@ -1,7 +1,7 @@
 #![feature(rustc_private)]
 
 //! Tests for combined decoration scenarios.
-use ferrous_owl::test::{DecoKind, ExpectedDeco, TestCase};
+use ferrous_owl::{DecoKind, ExpectedDeco, TestCase};
 #[test]
 fn combined_call_and_move() {
     TestCase::new(

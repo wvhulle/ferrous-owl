@@ -2,7 +2,7 @@
 
 //! Tests for immutable borrow decoration detection.
 
-use ferrous_owl::test::TestCase;
+use ferrous_owl::TestCase;
 #[test]
 fn imm_borrow_println() {
     TestCase::new(

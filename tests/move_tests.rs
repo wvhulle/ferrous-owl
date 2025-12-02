@@ -2,7 +2,7 @@
 
 //! Tests for move decoration detection.
 
-use ferrous_owl::test::TestCase;
+use ferrous_owl::TestCase;
 #[test]
 fn move_to_drop() {
     TestCase::new(

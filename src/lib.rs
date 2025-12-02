@@ -18,11 +18,16 @@ extern crate rustc_stable_hash;
 extern crate rustc_type_ir;
 extern crate smallvec;
 
-pub mod cli;
-pub mod compiler;
+mod cli;
+mod compiler;
 mod lsp;
 mod models;
-pub mod test;
+mod test;
 mod toolchain;
 mod utils;
-pub use lsp::backend::Backend;
+
+pub use cli::Cli;
+pub use compiler::run_as_rustc_wrapper;
+pub use test::{
+    DecoKind, ExpectedDeco, LspClient, TestCase, cleanup_workspace, run_test, setup_workspace,
+};
