@@ -729,4 +729,679 @@ impl range_ops::MirVisitor for CalcDecos {
     }
 }
 
-// TODO: new test
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        models::{
+            FnLocal, Function, Loc, MirBasicBlock, MirDecl, MirRval, MirStatement, MirTerminator,
+            Range,
+        },
+        range_ops::mir_visit,
+    };
+
+    fn r(from: u32, until: u32) -> Range {
+        Range::new(Loc::from(from), Loc::from(until)).unwrap()
+    }
+
+    fn local(id: u32) -> FnLocal {
+        FnLocal::new(id, 0)
+    }
+
+    fn user_decl(id: u32, name: &str, span: Range) -> MirDecl {
+        MirDecl::User {
+            local: local(id),
+            name: name.into(),
+            span,
+            ty: "i32".into(),
+            lives: vec![span],
+            shared_borrow: vec![],
+            mutable_borrow: vec![],
+            drop: false,
+            drop_range: vec![],
+            must_live_at: vec![],
+        }
+    }
+
+    // ── SelectLocal ─────────────────────────────────────────────────
+
+    #[test]
+    fn select_local_on_var_decl() {
+        let func = Function {
+            fn_id: 0,
+            decls: vec![user_decl(1, "x", r(5, 10))],
+            basic_blocks: vec![],
+        };
+        let mut sel = SelectLocal::new(Loc::from(7u32));
+        mir_visit(&func, &mut sel);
+        assert_eq!(sel.selected(), Some(local(1)));
+    }
+
+    #[test]
+    fn select_local_outside_span_returns_none() {
+        let func = Function {
+            fn_id: 0,
+            decls: vec![user_decl(1, "x", r(5, 10))],
+            basic_blocks: vec![],
+        };
+        let mut sel = SelectLocal::new(Loc::from(20u32));
+        mir_visit(&func, &mut sel);
+        assert_eq!(sel.selected(), None);
+    }
+
+    #[test]
+    fn select_local_on_move_rval() {
+        let func = Function {
+            fn_id: 0,
+            decls: vec![user_decl(1, "x", r(0, 3))],
+            basic_blocks: vec![MirBasicBlock {
+                statements: vec![MirStatement::Assign {
+                    target_local: local(1),
+                    range: r(10, 20),
+                    rval: Some(MirRval::Move {
+                        target_local: local(1),
+                        range: r(15, 18),
+                    }),
+                }],
+                terminator: None,
+            }],
+        };
+        let mut sel = SelectLocal::new(Loc::from(16u32));
+        mir_visit(&func, &mut sel);
+        assert_eq!(sel.selected(), Some(local(1)));
+    }
+
+    #[test]
+    fn select_local_on_borrow_rval() {
+        let func = Function {
+            fn_id: 0,
+            decls: vec![user_decl(1, "x", r(0, 3))],
+            basic_blocks: vec![MirBasicBlock {
+                statements: vec![MirStatement::Assign {
+                    target_local: local(1),
+                    range: r(10, 20),
+                    rval: Some(MirRval::Borrow {
+                        target_local: local(1),
+                        range: r(12, 17),
+                        mutable: true,
+                        outlive: None,
+                    }),
+                }],
+                terminator: None,
+            }],
+        };
+        let mut sel = SelectLocal::new(Loc::from(14u32));
+        mir_visit(&func, &mut sel);
+        assert_eq!(sel.selected(), Some(local(1)));
+    }
+
+    #[test]
+    fn select_local_on_call_terminator() {
+        let func = Function {
+            fn_id: 0,
+            decls: vec![user_decl(1, "x", r(0, 3))],
+            basic_blocks: vec![MirBasicBlock {
+                statements: vec![],
+                terminator: Some(MirTerminator::Call {
+                    destination_local: local(1),
+                    fn_span: r(30, 40),
+                }),
+            }],
+        };
+        let mut sel = SelectLocal::new(Loc::from(35u32));
+        mir_visit(&func, &mut sel);
+        assert_eq!(sel.selected(), Some(local(1)));
+    }
+
+    #[test]
+    fn select_local_var_wins_over_move_at_same_pos() {
+        // If cursor is inside both a var span and a move span,
+        // var selection should take priority (smaller span wins first, but
+        // once a Var is selected, non-Var reasons cannot override it).
+        let func = Function {
+            fn_id: 0,
+            decls: vec![user_decl(1, "x", r(5, 8))],
+            basic_blocks: vec![MirBasicBlock {
+                statements: vec![MirStatement::Assign {
+                    target_local: local(1),
+                    range: r(3, 20),
+                    rval: Some(MirRval::Move {
+                        target_local: local(1),
+                        range: r(3, 20),
+                    }),
+                }],
+                terminator: None,
+            }],
+        };
+        let mut sel = SelectLocal::new(Loc::from(6u32));
+        mir_visit(&func, &mut sel);
+        assert_eq!(sel.selected(), Some(local(1)));
+    }
+
+    #[test]
+    fn select_local_async_resume_ty_filtered() {
+        let func = Function {
+            fn_id: 0,
+            decls: vec![MirDecl::Other {
+                local: local(1),
+                ty: "std::future::ResumeTy".into(),
+                lives: vec![],
+                shared_borrow: vec![],
+                mutable_borrow: vec![],
+                drop: false,
+                drop_range: vec![],
+                must_live_at: vec![],
+            }],
+            basic_blocks: vec![MirBasicBlock {
+                statements: vec![MirStatement::Assign {
+                    target_local: local(1),
+                    range: r(0, 10),
+                    rval: Some(MirRval::Move {
+                        target_local: local(1),
+                        range: r(0, 10),
+                    }),
+                }],
+                terminator: None,
+            }],
+        };
+        let mut sel = SelectLocal::new(Loc::from(5u32));
+        mir_visit(&func, &mut sel);
+        // async ResumeTy locals are excluded from candidate_local_decls
+        assert_eq!(sel.selected(), None);
+    }
+
+    // ── CalcDecos: basic decoration generation ──────────────────────
+
+    fn func_with_move() -> Function {
+        Function {
+            fn_id: 0,
+            decls: vec![user_decl(1, "x", r(0, 5))],
+            basic_blocks: vec![MirBasicBlock {
+                statements: vec![MirStatement::Assign {
+                    target_local: local(1),
+                    range: r(10, 20),
+                    rval: Some(MirRval::Move {
+                        target_local: local(1),
+                        range: r(12, 18),
+                    }),
+                }],
+                terminator: None,
+            }],
+        }
+    }
+
+    #[test]
+    fn calc_decos_move() {
+        let func = func_with_move();
+        let mut calc = CalcDecos::new([local(1)]);
+        mir_visit(&func, &mut calc);
+        let decos = calc.decorations();
+        assert!(
+            decos
+                .iter()
+                .any(|d| matches!(d, Deco::Move { range, .. } if *range == r(12, 18))),
+            "Expected Move deco at [12,18], got: {decos:?}"
+        );
+    }
+
+    #[test]
+    fn calc_decos_imm_borrow() {
+        let func = Function {
+            fn_id: 0,
+            decls: vec![user_decl(1, "x", r(0, 5))],
+            basic_blocks: vec![MirBasicBlock {
+                statements: vec![MirStatement::Assign {
+                    target_local: local(1),
+                    range: r(10, 20),
+                    rval: Some(MirRval::Borrow {
+                        target_local: local(1),
+                        range: r(12, 18),
+                        mutable: false,
+                        outlive: None,
+                    }),
+                }],
+                terminator: None,
+            }],
+        };
+        let mut calc = CalcDecos::new([local(1)]);
+        mir_visit(&func, &mut calc);
+        let decos = calc.decorations();
+        assert!(
+            decos
+                .iter()
+                .any(|d| matches!(d, Deco::ImmBorrow { range, .. } if *range == r(12, 18))),
+            "Expected ImmBorrow deco, got: {decos:?}"
+        );
+    }
+
+    #[test]
+    fn calc_decos_mut_borrow() {
+        let func = Function {
+            fn_id: 0,
+            decls: vec![user_decl(1, "x", r(0, 5))],
+            basic_blocks: vec![MirBasicBlock {
+                statements: vec![MirStatement::Assign {
+                    target_local: local(1),
+                    range: r(10, 20),
+                    rval: Some(MirRval::Borrow {
+                        target_local: local(1),
+                        range: r(12, 18),
+                        mutable: true,
+                        outlive: None,
+                    }),
+                }],
+                terminator: None,
+            }],
+        };
+        let mut calc = CalcDecos::new([local(1)]);
+        mir_visit(&func, &mut calc);
+        let decos = calc.decorations();
+        assert!(
+            decos
+                .iter()
+                .any(|d| matches!(d, Deco::MutBorrow { range, .. } if *range == r(12, 18))),
+            "Expected MutBorrow deco, got: {decos:?}"
+        );
+    }
+
+    #[test]
+    fn calc_decos_call() {
+        let func = Function {
+            fn_id: 0,
+            decls: vec![user_decl(1, "x", r(0, 5))],
+            basic_blocks: vec![MirBasicBlock {
+                statements: vec![],
+                terminator: Some(MirTerminator::Call {
+                    destination_local: local(1),
+                    fn_span: r(30, 40),
+                }),
+            }],
+        };
+        let mut calc = CalcDecos::new([local(1)]);
+        mir_visit(&func, &mut calc);
+        let decos = calc.decorations();
+        assert!(
+            decos
+                .iter()
+                .any(|d| matches!(d, Deco::Call { range, .. } if *range == r(30, 40))),
+            "Expected Call deco, got: {decos:?}"
+        );
+    }
+
+    #[test]
+    fn calc_decos_lifetime_from_user_decl() {
+        let func = Function {
+            fn_id: 0,
+            decls: vec![user_decl(1, "x", r(0, 20))],
+            basic_blocks: vec![],
+        };
+        let mut calc = CalcDecos::new([local(1)]);
+        mir_visit(&func, &mut calc);
+        let decos = calc.decorations();
+        assert!(
+            decos
+                .iter()
+                .any(|d| matches!(d, Deco::Lifetime { range, hover_text, .. }
+                if *range == r(0, 20) && hover_text.contains("lifetime"))),
+            "Expected Lifetime deco, got: {decos:?}"
+        );
+    }
+
+    #[test]
+    fn calc_decos_ignores_unselected_local() {
+        let func = func_with_move();
+        let mut calc = CalcDecos::new([local(99)]); // different local
+        mir_visit(&func, &mut calc);
+        let decos = calc.decorations();
+        assert!(
+            decos.is_empty(),
+            "Expected no decos for unrelated local, got: {decos:?}"
+        );
+    }
+
+    // ── CalcDecos: nested call deduplication ────────────────────────
+
+    #[test]
+    fn calc_decos_wider_call_skipped_when_narrow_exists() {
+        // When a narrow Call exists first, then a wider one comes, the wider is skipped
+        // because is_super_range(new_fn_span, existing_range) returns true → early
+        // return
+        let func = Function {
+            fn_id: 0,
+            decls: vec![user_decl(1, "x", r(0, 5))],
+            basic_blocks: vec![
+                MirBasicBlock {
+                    statements: vec![],
+                    terminator: Some(MirTerminator::Call {
+                        destination_local: local(1),
+                        fn_span: r(15, 40),
+                    }),
+                },
+                MirBasicBlock {
+                    statements: vec![],
+                    terminator: Some(MirTerminator::Call {
+                        destination_local: local(1),
+                        fn_span: r(10, 50),
+                    }),
+                },
+            ],
+        };
+        let mut calc = CalcDecos::new([local(1)]);
+        mir_visit(&func, &mut calc);
+        let decos = calc.decorations();
+        let calls: Vec<_> = decos
+            .iter()
+            .filter(|d| matches!(d, Deco::Call { .. }))
+            .collect();
+        assert_eq!(
+            calls.len(),
+            1,
+            "Wider call should be skipped, got: {calls:?}"
+        );
+        assert!(matches!(calls[0], Deco::Call { range, .. } if *range == r(15, 40)));
+    }
+
+    // ── CalcDecos: SharedMut from overlapping borrow ranges ─────────
+
+    #[test]
+    fn calc_decos_shared_mut() {
+        let func = Function {
+            fn_id: 0,
+            decls: vec![MirDecl::User {
+                local: local(1),
+                name: "x".into(),
+                span: r(0, 5),
+                ty: "i32".into(),
+                lives: vec![r(0, 50)],
+                shared_borrow: vec![r(10, 30)],
+                mutable_borrow: vec![r(20, 40)],
+                drop: false,
+                drop_range: vec![],
+                must_live_at: vec![],
+            }],
+            basic_blocks: vec![],
+        };
+        let mut calc = CalcDecos::new([local(1)]);
+        mir_visit(&func, &mut calc);
+        let decos = calc.decorations();
+        assert!(
+            decos
+                .iter()
+                .any(|d| matches!(d, Deco::SharedMut { range, .. } if *range == r(20, 30))),
+            "Expected SharedMut deco at [20,30], got: {decos:?}"
+        );
+    }
+
+    // ── CalcDecos: Outlive decorations ──────────────────────────────
+
+    #[test]
+    fn calc_decos_outlive() {
+        let func = Function {
+            fn_id: 0,
+            decls: vec![MirDecl::User {
+                local: local(1),
+                name: "x".into(),
+                span: r(0, 5),
+                ty: "i32".into(),
+                lives: vec![r(0, 20)],
+                shared_borrow: vec![],
+                mutable_borrow: vec![],
+                drop: false,
+                drop_range: vec![],
+                must_live_at: vec![r(0, 30)],
+            }],
+            basic_blocks: vec![],
+        };
+        let mut calc = CalcDecos::new([local(1)]);
+        mir_visit(&func, &mut calc);
+        let decos = calc.decorations();
+        assert!(
+            decos
+                .iter()
+                .any(|d| matches!(d, Deco::Outlive { range, .. } if *range == r(21, 30))),
+            "Expected Outlive deco for range beyond lifetime, got: {decos:?}"
+        );
+    }
+
+    // ── handle_overlapping ──────────────────────────────────────────
+
+    #[test]
+    fn handle_overlapping_splits_lifetime_around_move() {
+        let func = Function {
+            fn_id: 0,
+            decls: vec![user_decl(1, "x", r(0, 30))],
+            basic_blocks: vec![MirBasicBlock {
+                statements: vec![MirStatement::Assign {
+                    target_local: local(1),
+                    range: r(10, 20),
+                    rval: Some(MirRval::Move {
+                        target_local: local(1),
+                        range: r(12, 18),
+                    }),
+                }],
+                terminator: None,
+            }],
+        };
+        let mut calc = CalcDecos::new([local(1)]);
+        mir_visit(&func, &mut calc);
+        calc.handle_overlapping();
+        let decos = calc.decorations();
+
+        // The lifetime [0,30] should be split around the move [12,18]:
+        // non-overlapped: [0,11] and [19,30], overlapped: [12,18]
+        let lifetimes: Vec<_> = decos
+            .iter()
+            .filter(|d| matches!(d, Deco::Lifetime { .. }))
+            .collect();
+        assert!(
+            lifetimes.len() >= 2,
+            "Lifetime should be split into at least 2 parts, got: {lifetimes:?}"
+        );
+        let overlapped_count = lifetimes
+            .iter()
+            .filter(|d| {
+                matches!(
+                    d,
+                    Deco::Lifetime {
+                        overlapped: true,
+                        ..
+                    }
+                )
+            })
+            .count();
+        assert!(
+            overlapped_count >= 1,
+            "At least one lifetime part should be marked overlapped"
+        );
+    }
+
+    #[test]
+    fn handle_overlapping_no_overlap_unchanged() {
+        let func = Function {
+            fn_id: 0,
+            decls: vec![user_decl(1, "x", r(0, 10))],
+            basic_blocks: vec![MirBasicBlock {
+                statements: vec![MirStatement::Assign {
+                    target_local: local(1),
+                    range: r(50, 60),
+                    rval: Some(MirRval::Move {
+                        target_local: local(1),
+                        range: r(52, 58),
+                    }),
+                }],
+                terminator: None,
+            }],
+        };
+        let mut calc = CalcDecos::new([local(1)]);
+        mir_visit(&func, &mut calc);
+        calc.handle_overlapping();
+        let decos = calc.decorations();
+        let overlapped_count = decos
+            .iter()
+            .filter(|d| match d {
+                Deco::Lifetime { overlapped, .. } | Deco::Move { overlapped, .. } => *overlapped,
+                _ => false,
+            })
+            .count();
+        assert_eq!(overlapped_count, 0, "No overlaps expected, got: {decos:?}");
+    }
+
+    // ── Deco methods ────────────────────────────────────────────────
+
+    #[test]
+    fn should_show_as_diagnostic_filters_lifetime() {
+        let lifetime = Deco::Lifetime::<Range> {
+            local: local(1),
+            range: r(0, 10),
+            hover_text: "test".into(),
+            overlapped: false,
+        };
+        assert!(!lifetime.should_show_as_diagnostic());
+
+        let mv = Deco::Move::<Range> {
+            local: local(1),
+            range: r(0, 10),
+            hover_text: "test".into(),
+            overlapped: false,
+        };
+        assert!(mv.should_show_as_diagnostic());
+    }
+
+    #[test]
+    fn diagnostic_severity_mapping() {
+        let outlive = Deco::Outlive::<Range> {
+            local: local(1),
+            range: r(0, 1),
+            hover_text: String::new(),
+            overlapped: false,
+        };
+        assert_eq!(
+            outlive.diagnostic_severity(),
+            lsp_types::DiagnosticSeverity::ERROR
+        );
+
+        let mv = Deco::Move::<Range> {
+            local: local(1),
+            range: r(0, 1),
+            hover_text: String::new(),
+            overlapped: false,
+        };
+        assert_eq!(
+            mv.diagnostic_severity(),
+            lsp_types::DiagnosticSeverity::WARNING
+        );
+
+        let call = Deco::Call::<Range> {
+            local: local(1),
+            range: r(0, 1),
+            hover_text: String::new(),
+            overlapped: false,
+        };
+        assert_eq!(
+            call.diagnostic_severity(),
+            lsp_types::DiagnosticSeverity::INFORMATION
+        );
+
+        let imm = Deco::ImmBorrow::<Range> {
+            local: local(1),
+            range: r(0, 1),
+            hover_text: String::new(),
+            overlapped: false,
+        };
+        assert_eq!(
+            imm.diagnostic_severity(),
+            lsp_types::DiagnosticSeverity::HINT
+        );
+    }
+
+    #[test]
+    fn diagnostic_code_contains_pkg_name() {
+        let deco = Deco::Move::<Range> {
+            local: local(1),
+            range: r(0, 10),
+            hover_text: "test".into(),
+            overlapped: false,
+        };
+        let code = deco.diagnostic_code();
+        assert!(
+            code.contains("ferrous-owl"),
+            "Code should contain package name, got: {code}"
+        );
+        assert!(
+            code.contains("move"),
+            "Code should contain deco type, got: {code}"
+        );
+    }
+
+    #[test]
+    fn all_deco_variants_should_show_as_diagnostic() {
+        let l = local(1);
+        let range = r(0, 1);
+        let ht = String::new();
+
+        // Lifetime is the only one that should NOT show as diagnostic
+        assert!(
+            !Deco::Lifetime::<Range> {
+                local: l,
+                range,
+                hover_text: ht.clone(),
+                overlapped: false
+            }
+            .should_show_as_diagnostic()
+        );
+        assert!(
+            Deco::ImmBorrow::<Range> {
+                local: l,
+                range,
+                hover_text: ht.clone(),
+                overlapped: false
+            }
+            .should_show_as_diagnostic()
+        );
+        assert!(
+            Deco::MutBorrow::<Range> {
+                local: l,
+                range,
+                hover_text: ht.clone(),
+                overlapped: false
+            }
+            .should_show_as_diagnostic()
+        );
+        assert!(
+            Deco::Move::<Range> {
+                local: l,
+                range,
+                hover_text: ht.clone(),
+                overlapped: false
+            }
+            .should_show_as_diagnostic()
+        );
+        assert!(
+            Deco::Call::<Range> {
+                local: l,
+                range,
+                hover_text: ht.clone(),
+                overlapped: false
+            }
+            .should_show_as_diagnostic()
+        );
+        assert!(
+            Deco::SharedMut::<Range> {
+                local: l,
+                range,
+                hover_text: ht.clone(),
+                overlapped: false
+            }
+            .should_show_as_diagnostic()
+        );
+        assert!(
+            Deco::Outlive::<Range> {
+                local: l,
+                range,
+                hover_text: ht,
+                overlapped: false
+            }
+            .should_show_as_diagnostic()
+        );
+    }
+}

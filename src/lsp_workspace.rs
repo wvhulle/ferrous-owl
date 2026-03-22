@@ -92,9 +92,7 @@ impl Analyzer {
     }
 
     pub async fn analyze(&self, all_targets: bool, all_features: bool) -> AnalyzeEventIter {
-        if let Some(metadata) = &self.metadata
-            && metadata.root_package().is_some()
-        {
+        if let Some(metadata) = &self.metadata {
             self.analyze_package(metadata, all_targets, all_features)
                 .await
         } else {
@@ -108,17 +106,19 @@ impl Analyzer {
         all_targets: bool,
         all_features: bool,
     ) -> AnalyzeEventIter {
-        let package_name = metadata.root_package().as_ref().unwrap().name.to_string();
         let target_dir = metadata.target_directory.as_std_path().join("owl");
-        log::info!("clear cargo cache");
-        let mut command = toolchain::setup_cargo_command();
-        command
-            .args(["clean", "--package", &package_name])
+
+        log::info!("clear cargo cache for workspace");
+        let mut clean_cmd = toolchain::setup_cargo_command();
+        clean_cmd
+            .args(["clean", "--workspace"])
             .env("CARGO_TARGET_DIR", &target_dir)
             .current_dir(&self.path)
             .stdout(Stdio::null())
             .stderr(Stdio::null());
-        command.spawn().unwrap().wait().await.ok();
+        if let Ok(mut child) = clean_cmd.spawn() {
+            child.wait().await.ok();
+        }
 
         let mut command = toolchain::setup_cargo_command();
 
@@ -150,7 +150,10 @@ impl Analyzer {
 
         let package_count = metadata.packages.len();
 
-        log::info!("start analyzing package {package_name}");
+        let workspace_name = metadata
+            .root_package()
+            .map_or_else(|| self.path.display().to_string(), |p| p.name.to_string());
+        log::info!("start analyzing package {workspace_name}");
         let mut child = command.spawn().unwrap();
         let mut stdout = BufReader::new(child.stdout.take().unwrap()).lines();
 

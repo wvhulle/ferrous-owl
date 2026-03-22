@@ -30,10 +30,8 @@ mod mir_transform;
 mod models;
 mod range_ops;
 mod rustc_wrapper;
-mod test_framework;
 mod text_conversion;
 mod toolchain;
 
 pub use cli::Cli;
 pub use rustc_wrapper::run_as_rustc_wrapper;
-pub use test_framework::{DecoKind, ExpectedDeco, TestCase, run_tests};

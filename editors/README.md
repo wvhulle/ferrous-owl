@@ -25,10 +25,10 @@ The server provides code actions at the cursor position:
 
 | Action | Description |
 |--------|-------------|
-| Show ownership | Publishes ownership decorations as diagnostics |
-| Hide ownership | Clears ownership diagnostics |
+| Show ownership | Publishes ownership decorations as diagnostics for the variable at cursor |
+| Re-analyze | Triggers re-analysis of the workspace |
 
-The action title reflects the current state (analyzing, waiting, enabled/disabled).
+The "Show ownership" action title reflects the current analysis state (analyzing, waiting for analysis, or ready).
 
 ### Execute Command
 
@@ -36,10 +36,12 @@ The server supports these commands via `workspace/executeCommand`:
 
 | Command | Arguments | Description |
 |---------|-----------|-------------|
-| `ferrous-owl.toggleOwnership` | `[uri, line, character]` | Toggle ownership diagnostics for a file |
-| `ferrous-owl.enableOwnership` | `[uri, line, character]` | Enable ownership diagnostics |
-| `ferrous-owl.disableOwnership` | `[uri]` | Disable ownership diagnostics |
+| `ferrous-owl.showOwnership` | `[uri, line, character]` | Show ownership diagnostics for the variable at the given position |
 | `ferrous-owl.analyze` | none | Trigger re-analysis |
+
+### Did Save
+
+When a Rust file is saved, the server automatically triggers re-analysis.
 
 ## Types
 
@@ -103,7 +105,7 @@ Triggers analysis of the workspace. Analysis runs automatically on initializatio
 
 ## Diagnostics
 
-When ownership visualization is enabled via code action or command, the server publishes decorations as LSP diagnostics with these severity mappings:
+When ownership visualization is requested via code action or command, the server publishes decorations as LSP diagnostics with these severity mappings:
 
 | Decoration Type | Severity |
 |-----------------|----------|

@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
     sync::Arc,
@@ -17,9 +17,7 @@ use crate::{
 };
 
 /// Commands supported by workspace/executeCommand
-pub const CMD_TOGGLE_OWNERSHIP: &str = "ferrous-owl.toggleOwnership";
-pub const CMD_ENABLE_OWNERSHIP: &str = "ferrous-owl.enableOwnership";
-pub const CMD_DISABLE_OWNERSHIP: &str = "ferrous-owl.disableOwnership";
+pub const CMD_SHOW_OWNERSHIP: &str = "ferrous-owl.showOwnership";
 pub const CMD_ANALYZE: &str = "ferrous-owl.analyze";
 
 #[derive(serde::Deserialize, Clone, Debug)]
@@ -27,13 +25,6 @@ pub const CMD_ANALYZE: &str = "ferrous-owl.analyze";
 pub struct AnalyzeRequest {}
 #[derive(serde::Serialize, Clone, Debug)]
 pub struct AnalyzeResponse {}
-
-/// Tracks whether ownership diagnostics are enabled for each document
-#[derive(Default, Clone)]
-struct OwnershipState {
-    /// Map from file path to (enabled, `cursor_position`)
-    enabled_files: HashMap<PathBuf, (bool, Option<lsp_types::Position>)>,
-}
 
 /// `FerrousOwl` LSP server backend
 pub struct Backend {
@@ -44,8 +35,6 @@ pub struct Backend {
     processes: Arc<RwLock<JoinSet<()>>>,
     process_tokens: Arc<RwLock<BTreeMap<usize, CancellationToken>>>,
     work_done_progress: Arc<RwLock<bool>>,
-    /// Per-document state for ownership diagnostics display
-    ownership_state: Arc<RwLock<OwnershipState>>,
 }
 
 impl Backend {
@@ -59,7 +48,6 @@ impl Backend {
             processes: Arc::new(RwLock::new(JoinSet::new())),
             process_tokens: Arc::new(RwLock::new(BTreeMap::new())),
             work_done_progress: Arc::new(RwLock::new(false)),
-            ownership_state: Arc::new(RwLock::new(OwnershipState::default())),
         }
     }
 
@@ -334,13 +322,6 @@ impl Backend {
         }
     }
 
-    /// Clear ownership diagnostics for a file
-    async fn clear_ownership_diagnostics(&self, path: &Path) {
-        if let Ok(uri) = lsp_types::Url::from_file_path(path) {
-            self.client.publish_diagnostics(uri, Vec::new(), None).await;
-        }
-    }
-
     /// Handle workspace/executeCommand for ownership visualization commands
     pub async fn handle_execute_command(
         &self,
@@ -353,65 +334,13 @@ impl Backend {
         );
 
         match params.command.as_str() {
-            CMD_TOGGLE_OWNERSHIP => {
-                log::debug!("Processing toggleOwnership command");
-                // Arguments: [document_uri, line, character]
-                if let Some(args) = Self::parse_position_args(&params.arguments) {
-                    let (path, position) = args;
-                    log::debug!(
-                        "Parsed args: path={}, position={position:?}",
-                        path.display()
-                    );
-                    let mut state = self.ownership_state.write().await;
-                    let entry = state
-                        .enabled_files
-                        .entry(path.clone())
-                        .or_insert((false, None));
-                    entry.0 = !entry.0;
-                    entry.1 = Some(position);
-                    let enabled = entry.0;
-                    drop(state);
-
-                    if enabled {
-                        log::debug!("Publishing ownership diagnostics for {}", path.display());
-                        self.publish_ownership_diagnostics(&path, position).await;
-                    } else {
-                        log::debug!("Clearing ownership diagnostics for {}", path.display());
-                        self.clear_ownership_diagnostics(&path).await;
-                    }
-                    Ok(Some(serde_json::json!({ "enabled": enabled })))
-                } else {
-                    log::error!("Failed to parse position args from {:?}", params.arguments);
-                    Err(jsonrpc::Error::invalid_params(
-                        "Expected arguments: [document_uri, line, character]",
-                    ))
-                }
-            }
-            CMD_ENABLE_OWNERSHIP => {
+            CMD_SHOW_OWNERSHIP => {
                 if let Some((path, position)) = Self::parse_position_args(&params.arguments) {
-                    let mut state = self.ownership_state.write().await;
-                    state
-                        .enabled_files
-                        .insert(path.clone(), (true, Some(position)));
-                    drop(state);
                     self.publish_ownership_diagnostics(&path, position).await;
-                    Ok(Some(serde_json::json!({ "enabled": true })))
+                    Ok(Some(serde_json::json!({ "status": "ok" })))
                 } else {
                     Err(jsonrpc::Error::invalid_params(
                         "Expected arguments: [document_uri, line, character]",
-                    ))
-                }
-            }
-            CMD_DISABLE_OWNERSHIP => {
-                if let Some((path, _)) = Self::parse_position_args(&params.arguments) {
-                    let mut state = self.ownership_state.write().await;
-                    state.enabled_files.insert(path.clone(), (false, None));
-                    drop(state);
-                    self.clear_ownership_diagnostics(&path).await;
-                    Ok(Some(serde_json::json!({ "enabled": false })))
-                } else {
-                    Err(jsonrpc::Error::invalid_params(
-                        "Expected arguments: [document_uri]",
                     ))
                 }
             }
@@ -512,12 +441,7 @@ impl LanguageServer for Backend {
         };
         // Advertise executeCommand capability with supported commands
         let execute_command_provider = lsp_types::ExecuteCommandOptions {
-            commands: vec![
-                CMD_TOGGLE_OWNERSHIP.to_string(),
-                CMD_ENABLE_OWNERSHIP.to_string(),
-                CMD_DISABLE_OWNERSHIP.to_string(),
-                CMD_ANALYZE.to_string(),
-            ],
+            commands: vec![CMD_SHOW_OWNERSHIP.to_string(), CMD_ANALYZE.to_string()],
             work_done_progress_options: lsp_types::WorkDoneProgressOptions::default(),
         };
         // Advertise code action support
@@ -584,6 +508,15 @@ impl LanguageServer for Backend {
         self.shutdown_subprocesses().await;
     }
 
+    async fn did_save(&self, params: lsp_types::DidSaveTextDocumentParams) {
+        if let Ok(path) = params.text_document.uri.to_file_path()
+            && path.extension().is_some_and(|ext| ext == "rs")
+        {
+            log::info!("Rust file saved, re-analyzing: {}", path.display());
+            self.do_analyze().await;
+        }
+    }
+
     async fn code_action(
         &self,
         params: lsp_types::CodeActionParams,
@@ -591,55 +524,46 @@ impl LanguageServer for Backend {
         let uri = params.text_document.uri.clone();
         let position = params.range.start;
 
-        // Check analysis status
         let status = *self.status.read().await;
-        let is_analyzed = self.analyzed.read().await.is_some();
 
-        // Check if ownership diagnostics are currently enabled for this file
-        let is_enabled = if let Ok(path) = uri.to_file_path() {
-            self.ownership_state
-                .read()
-                .await
-                .enabled_files
-                .get(&path)
-                .is_some_and(|(enabled, _)| *enabled)
-        } else {
-            false
-        };
-
-        let mut actions = Vec::new();
-
-        // Show/Hide ownership action - always show, even if not ready
-        let title = match (is_analyzed, is_enabled) {
-            _ if status == progress::AnalysisStatus::Analyzing => {
-                "FerrousOwl: Show ownership (analyzing...)"
+        let show_title = match status {
+            progress::AnalysisStatus::Analyzing => "FerrousOwl: Show ownership (analyzing...)",
+            _ if self.analyzed.read().await.is_none() => {
+                "FerrousOwl: Show ownership (waiting for analysis)"
             }
-            (false, _) => "FerrousOwl: Show ownership (waiting for analysis)",
-            (true, true) => "FerrousOwl: Hide ownership",
-            (true, false) => "FerrousOwl: Show ownership",
+            _ => "FerrousOwl: Show ownership",
         };
 
-        let action = lsp_types::CodeAction {
-            title: title.to_string(),
+        let show_action = lsp_types::CodeAction {
+            title: show_title.to_string(),
             kind: Some(lsp_types::CodeActionKind::SOURCE),
-            diagnostics: None,
-            edit: None,
             command: Some(lsp_types::Command {
-                title: title.to_string(),
-                command: CMD_TOGGLE_OWNERSHIP.to_string(),
+                title: show_title.to_string(),
+                command: CMD_SHOW_OWNERSHIP.to_string(),
                 arguments: Some(vec![
                     serde_json::json!(uri.to_string()),
                     serde_json::json!(position.line),
                     serde_json::json!(position.character),
                 ]),
             }),
-            is_preferred: None,
-            disabled: None,
-            data: None,
+            ..Default::default()
         };
-        actions.push(lsp_types::CodeActionOrCommand::CodeAction(action));
 
-        Ok(Some(actions))
+        let analyze_action = lsp_types::CodeAction {
+            title: "FerrousOwl: Re-analyze".to_string(),
+            kind: Some(lsp_types::CodeActionKind::SOURCE),
+            command: Some(lsp_types::Command {
+                title: "FerrousOwl: Re-analyze".to_string(),
+                command: CMD_ANALYZE.to_string(),
+                arguments: None,
+            }),
+            ..Default::default()
+        };
+
+        Ok(Some(vec![
+            lsp_types::CodeActionOrCommand::CodeAction(show_action),
+            lsp_types::CodeActionOrCommand::CodeAction(analyze_action),
+        ]))
     }
 
     async fn execute_command(

@@ -29,9 +29,9 @@ cp . ~/.config/helix
 2. Simply press `<space>a` (code actions) while your cursor is on a variable, then select:
 
 - **"FerrousOwl: Show ownership"** - Display ownership/lifetime diagnostics for the variable under cursor
-- **"FerrousOwl: Hide ownership"** - Clear the diagnostics
+- **"FerrousOwl: Re-analyze"** - Trigger re-analysis of the workspace
 
-That's it! The ownership information will appear as inline diagnostics.
+Re-analysis also happens automatically whenever you save a Rust file.
 
 ## Troubleshooting
 
